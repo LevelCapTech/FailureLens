@@ -196,7 +196,7 @@ class EmbeddingAnalyzer:
             evidence = [
                 *candidate.evidence,
                 Evidence(
-                    kind=EvidenceKind.LEXICAL_MATCH,
+                    kind=EvidenceKind.SIMILARITY,
                     description=f"Embedding similarity to the failure: {similarity:.3f}.",
                 ),
             ]

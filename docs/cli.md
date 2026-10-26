@@ -42,7 +42,7 @@ Diagnoses a failure and prints ranked candidate fault locations.
 ### `models`
 ```bash
 failurelens models list [--format text|json]   # backends usable here
-failurelens models info [--id <backend>] [--format text|json]   # details
+failurelens models info [--model <backend>] [--format text|json]   # details
 ```
 `models list` honestly distinguishes what is **available** now (the baseline)
 from external/optional entries that require the `ml` extra. No FailureLens-trained

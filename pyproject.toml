@@ -1,7 +1,7 @@
 # Repository-wide tooling configuration for the FailureLens monorepo.
 #
 # This file intentionally does NOT define a build target: the distributable
-# package lives in `packages/python/`. It centralizes lin/type/test config so
+# package lives in `packages/python/`. It centralizes lint/type/test config so
 # the same rules apply across the whole repo.
 
 [tool.ruff]

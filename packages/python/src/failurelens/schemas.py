@@ -56,6 +56,7 @@ class EvidenceKind(StrEnum):
     EXCEPTION_SITE = "exception_site"
     PATH_MATCH = "path_match"
     LEXICAL_MATCH = "lexical_match"
+    SIMILARITY = "similarity"
 
 
 class UnitKind(StrEnum):
@@ -137,7 +138,7 @@ class Candidate(BaseModel):
 class DiagnosisResult(BaseModel):
     """Top-level result returned by :meth:`failurelens.FailureLens.diagnose`."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
     schema_version: str = Field(default=SCHEMA_VERSION)
     status: AnalysisStatus
