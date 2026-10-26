@@ -1,0 +1,18 @@
+{
+  "description": "Tiny demonstration benchmark for the FailureLens baseline. This is NOT a performance claim - it is a single reproducible case used to exercise the evaluation harness end to end. Add more labelled cases here as real, license-cleared data becomes available (see datasets/README.md).",
+  "schema_version": "0.1.0",
+  "cases": [
+    {
+      "case_id": "sample_project-zerodivision",
+      "repository": "examples/fixtures/sample_project",
+      "error_log": "examples/fixtures/sample_project/failure.log",
+      "relevant_files": [
+        "calculator/core.py"
+      ],
+      "relevant_functions": [
+        "calculator/core.py::average"
+      ],
+      "label_rationale": "The ZeroDivisionError surfaces in divide(), but the root cause is average(), which fails to guard against an empty input sequence (see the function docstrings in calculator/core.py)."
+    }
+  ]
+}
