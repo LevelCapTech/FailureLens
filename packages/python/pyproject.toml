@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "failurelens"
+dynamic = ["version"]
+description = "AI-powered fault localization: rank the code likely responsible for a failure."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "LevelCapTech" }]
+keywords = [
+    "fault-localization",
+    "debugging",
+    "stack-trace",
+    "static-analysis",
+    "code-search",
+    "developer-tools",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+# Core runtime deps are intentionally lightweight: the baseline needs no ML stack.
+dependencies = [
+    "pydantic>=2.6,<3",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+# Optional embedding backend. Minimum versions avoid known advisories
+# (torch<2.6, transformers<5.10, sentence-transformers<5.6 are vulnerable).
+ml = [
+    "torch>=2.6.0",
+    "transformers>=5.10.0",
+    "sentence-transformers>=5.6.0",
+    "huggingface-hub>=0.24.0",
+    "safetensors>=0.4.3",
+    "numpy>=1.26.0",
+]
+# Training/evaluation extras build on top of the ml stack.
+train = [
+    "failurelens[ml]",
+    "datasets>=2.21.0",
+    "accelerate>=0.33.0",
+    "scikit-learn>=1.5.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+    "build>=1.2.0",
+    "twine>=5.1.0",
+]
+
+[project.scripts]
+failurelens = "failurelens.cli:run"
+
+[project.urls]
+Homepage = "https://github.com/LevelCapTech/FailureLens"
+Repository = "https://github.com/LevelCapTech/FailureLens"
+Issues = "https://github.com/LevelCapTech/FailureLens/issues"
+Documentation = "https://github.com/LevelCapTech/FailureLens/tree/main/docs"
+
+[tool.hatch.version]
+path = "src/failurelens/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/failurelens"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/failurelens", "tests", "README.md"]
