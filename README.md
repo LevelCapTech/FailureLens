@@ -107,6 +107,8 @@ AGENTS.md          Single source of truth for contributors & AI agents
 | Security | [docs/security.md](docs/security.md) · [SECURITY.md](SECURITY.md) |
 | Model card | [docs/model-card.md](docs/model-card.md) |
 | Roadmap | [docs/roadmap.md](docs/roadmap.md) |
+| Requirements | [docs/requirements.md](docs/requirements.md) |
+| AI-model design gate | [docs/decision-gate.md](docs/decision-gate.md) · [data contract](docs/data-contract.md) · [eval protocol](docs/evaluation-protocol.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) |
 
 ## Development

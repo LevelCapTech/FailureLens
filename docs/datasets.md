@@ -4,6 +4,10 @@ This document specifies how FailureLens builds fault-localization data. It
 reflects the project charter (§10). **Status: design + schemas.** No large data
 and no fabricated labels ship in this repository.
 
+The approved **data contract** — the source/rights matrix, the rights-cleared
+pilot, and the **semantic quality gates** that JSON Schema alone cannot enforce —
+is in [`docs/data-contract.md`](data-contract.md) (a design-gate deliverable).
+
 ## Principles
 
 - **Label reliability over quantity.** A bug *injected* at a location is not
