@@ -1,0 +1,24 @@
+{
+  "analysis_method": "baseline-stacktrace-lexical",
+  "benchmark": "evaluation/benchmarks/sample_cases.json",
+  "file_level": {
+    "mrr": 1.0,
+    "num_cases": 1.0,
+    "recall_at_1": 1.0,
+    "recall_at_10": 1.0,
+    "recall_at_5": 1.0,
+    "top_10_accuracy": 1.0,
+    "top_1_accuracy": 1.0,
+    "top_5_accuracy": 1.0
+  },
+  "function_level": {
+    "mrr": 0.5,
+    "num_cases": 1.0,
+    "recall_at_1": 0.0,
+    "recall_at_10": 1.0,
+    "recall_at_5": 1.0,
+    "top_10_accuracy": 1.0,
+    "top_1_accuracy": 0.0,
+    "top_5_accuracy": 1.0
+  }
+}
