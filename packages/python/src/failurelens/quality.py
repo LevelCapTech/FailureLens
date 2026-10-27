@@ -131,7 +131,7 @@ _ENV_FAILURE_SIGNATURES: tuple[str, ...] = (
 # Secret screeners. Explicit, well-known credential shapes plus a conservative
 # high-entropy fallback. These are screeners, not guarantees.
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"),
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),  # AWS access key id
     re.compile(r"\bASIA[0-9A-Z]{16}\b"),  # AWS temporary access key id
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"),  # GitHub tokens
@@ -150,11 +150,15 @@ _SECRET_TOKEN_RE = re.compile(r"[A-Za-z0-9+/=_\-]{32,}")
 _SECRET_ENTROPY_BITS = 4.5
 
 # PII screeners.
-_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
+#: Unambiguous email shape: a local part, then at least one dotted domain label.
+#: The negated classes exclude the delimiters ("@" and "."), so no two quantifiers
+#: compete for the same characters (linear matching, no catastrophic backtracking).
+_EMAIL_RE = re.compile(r"[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+")
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 #: A loose phone-like run; confirmed only when it has >=10 digits and a separator,
 #: so plain short line numbers in a traceback are not mistaken for phone numbers.
-_PHONE_CANDIDATE_RE = re.compile(r"\+?\d[\d\s().\-]{7,}\d")
+#: A single quantified class (no trailing overlapping digit) keeps matching linear.
+_PHONE_CANDIDATE_RE = re.compile(r"\+?\d[\d\s().\-]{8,}")
 
 
 def _shannon_entropy(value: str) -> float:
