@@ -4,6 +4,11 @@ FailureLens's value depends on being **measurably** useful, not merely on having
 a model. This document describes the independent evaluation setup (project
 charter §13). **The harness and metrics below work today.**
 
+The formal comparison rules — candidate parity, primary vs secondary metrics,
+missing-label handling, reproducible reporting, and claim governance — are fixed
+in [`docs/evaluation-protocol.md`](evaluation-protocol.md) (a design-gate
+deliverable).
+
 ## What runs today
 
 - A reusable, unit-tested metrics library: `failurelens.evaluation.metrics`.

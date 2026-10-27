@@ -9,6 +9,17 @@ may change as experiments produce evidence.
 > Complete a genuinely working minimal baseline first; then move to dedicated
 > model training and evaluation. Do not build a large, un-runnable codebase.
 
+## Design gate (before scale-up)
+
+The medium-term model and data work below is subject to an approved **design
+gate**: the data contract, independent evaluation protocol, and Go/No-Go criteria
+in [`docs/decision-gate.md`](decision-gate.md) (with
+[`docs/requirements.md`](requirements.md),
+[`docs/data-contract.md`](data-contract.md), and
+[`docs/evaluation-protocol.md`](evaluation-protocol.md)). It authorizes **no**
+full-scale training or dataset/model release; numeric acceptance thresholds are
+frozen only after pilot and baseline measurement, with human approval.
+
 ## Done (works today)
 
 - Monorepo structure and lightweight, installable `failurelens` package.
