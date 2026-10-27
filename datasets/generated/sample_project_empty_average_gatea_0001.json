@@ -1,0 +1,52 @@
+{
+  "record_id": "sample-project-empty-average-gatea-0001",
+  "dataset_id": "failurelens-gatea-pilot-v0.1",
+  "source_repository": "examples/fixtures/sample_project",
+  "source_commit": "61af5a5c04a3eb94b55471c3208a3a5452c18aa2",
+  "source_license": "Apache-2.0",
+  "language": "python",
+  "injection_method": "manual-removal-of-empty-input-guard",
+  "injection_location": {
+    "file": "calculator/core.py",
+    "function": "average",
+    "start_line": 15,
+    "end_line": 22
+  },
+  "has_fix_patch": true,
+  "test_command": "python3 app.py",
+  "pre_change_result": {
+    "status": "passed",
+    "exit_code": 0,
+    "duration_ms": null
+  },
+  "post_change_result": {
+    "status": "failed",
+    "exit_code": 1,
+    "duration_ms": null
+  },
+  "error_log": "Traceback (most recent call last):\n  File \"examples/fixtures/sample_project/app.py\", line 21, in <module>\n    main()\n  File \"examples/fixtures/sample_project/app.py\", line 17, in main\n    report_scores([])\n  File \"examples/fixtures/sample_project/app.py\", line 12, in report_scores\n    print(f\"Average score: {average(scores)}\")\n                            ^^^^^^^^^^^^^^^\n  File \"examples/fixtures/sample_project/calculator/core.py\", line 22, in average\n    return divide(total, len(values))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"examples/fixtures/sample_project/calculator/core.py\", line 12, in divide\n    return numerator / denominator\n           ~~~~~~~~~~^~~~~~~~~~~~~\nZeroDivisionError: division by zero\n",
+  "stack_trace": "examples/fixtures/sample_project/app.py:21 (<module>) -> examples/fixtures/sample_project/app.py:17 (main) -> examples/fixtures/sample_project/app.py:12 (report_scores) -> examples/fixtures/sample_project/calculator/core.py:22 (average) -> examples/fixtures/sample_project/calculator/core.py:12 (divide)",
+  "candidates": [
+    {
+      "location": {
+        "file": "calculator/core.py",
+        "function": "average",
+        "start_line": 15,
+        "end_line": 22
+      },
+      "label": "positive"
+    },
+    {
+      "location": {
+        "file": "calculator/core.py",
+        "function": "divide",
+        "start_line": 6,
+        "end_line": 12
+      },
+      "label": "negative"
+    }
+  ],
+  "label_rationale": "The manual change removes the empty-input guard in average(); for report_scores([]), average() passes denominator zero to divide(). divide() raises ZeroDivisionError but correctly performs the requested division, so it is the surfacing site and a negative candidate. The positive root-cause label is average(), supported by the observed clean pass and changed failure.",
+  "generated_at": "2026-10-27T10:37:43.818789Z",
+  "generator_version": "manual-gate-a-pilot/0.1"
+}

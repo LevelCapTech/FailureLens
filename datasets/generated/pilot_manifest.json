@@ -1,0 +1,13 @@
+{
+  "dataset_id": "failurelens-gatea-pilot-v0.1",
+  "record_id": "sample-project-empty-average-gatea-0001",
+  "license": "CC-BY-4.0",
+  "source_type": "synthetic",
+  "provenance": {
+    "fixture": "examples/fixtures/sample_project",
+    "source_commit": "61af5a5c04a3eb94b55471c3208a3a5452c18aa2",
+    "source_license": "Apache-2.0"
+  },
+  "split": "train",
+  "notes": "Pilot artifact only; no evaluation holdout. The canonical record schema has no license, source_type, or provenance field, so these dataset-level facts are separate."
+}
