@@ -23,6 +23,7 @@ This is a core research area for FailureLens.
 | `validation/` | Quality gates: completeness, leakage checks, duplicate detection. |
 | `schemas/` | The canonical record schema (`record.schema.json`) and field docs. |
 | `fixtures/` | Tiny checked-in examples that conform to the schema (for tests/docs). |
+| `generated/` | One manual Gate A pilot record, metadata manifest, and offline verification script; not an evaluation set. |
 
 ## Data generation pipeline (intended)
 
@@ -54,3 +55,7 @@ transformation code* (not the data itself) is an acceptable option.
 
 See `schemas/README.md` for the record format and `docs/datasets.md` for the full
 specification.
+
+## Current rights boundary
+
+Only the in-repo `examples/fixtures/sample_project` (Apache-2.0) is **Usable** for this pilot. SWE-smith, SWE-bench, OSS bug-fix histories, and mutation on other rights-cleared repositories remain **Pending**; see `docs/data-contract.md`. The pilot record has separate CC-BY-4.0 annotation metadata in `generated/pilot_manifest.json`. No external data was used.
