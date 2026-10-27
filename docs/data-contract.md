@@ -8,8 +8,9 @@ cannot enforce. It extends `docs/datasets.md` (the full dataset specification).
 > **Status: proposed design, awaiting human approval.** No large data and no
 > fabricated labels ship in this repository, and **no unapproved data is
 > used**. The generation/collection pipeline is planned (`datasets/`
-> subdirectory READMEs). Implementing the gates below belongs to separately
-> scoped `[IMPLEMENT]` issues.
+> subdirectory READMEs). The **semantic quality gates** below are now
+> implemented in code (`failurelens.quality`, issue #5); the remaining
+> collection/pilot work stays in separately scoped `[IMPLEMENT]` issues.
 
 ## Principles
 
@@ -78,9 +79,9 @@ Every record conforms to `datasets/schemas/record.schema.json` and pins:
 JSON Schema validation is **necessary but not sufficient**: the current schema
 accepts `source_license: "unknown"` and an **empty** `candidates` array, and does
 not require a non-empty rationale. The following semantic gates must therefore be
-enforced in addition to structural validation. (Specified here; implementation is
-a separate `[IMPLEMENT]` issue — today only the structural check in
-`tests/regression/test_dataset_schema.py` runs.)
+enforced in addition to structural validation. (Specified here; now **implemented**
+in `failurelens.quality` (issue #5) via `validate_record` / `validate_record_set`,
+alongside the structural check in `tests/regression/test_dataset_schema.py`.)
 
 | Gate | Rule | Rejection reason recorded |
 |------|------|---------------------------|

@@ -26,6 +26,15 @@ from failurelens.errors import (
     ModelError,
     RepositoryError,
 )
+from failurelens.quality import (
+    DEFAULT_REDISTRIBUTION_ALLOWLIST,
+    GateRejectionReason,
+    GateResult,
+    check_pii,
+    check_secret,
+    validate_record,
+    validate_record_set,
+)
 from failurelens.schemas import (
     SCHEMA_VERSION,
     AnalysisStatus,
@@ -39,6 +48,7 @@ from failurelens.schemas import (
 )
 
 __all__ = [
+    "DEFAULT_REDISTRIBUTION_ALLOWLIST",
     "SCHEMA_VERSION",
     "AnalysisStatus",
     "Candidate",
@@ -48,6 +58,8 @@ __all__ = [
     "EvidenceKind",
     "FailureLens",
     "FailureLensError",
+    "GateRejectionReason",
+    "GateResult",
     "IndexConfig",
     "InputError",
     "MissingDependencyError",
@@ -57,4 +69,8 @@ __all__ = [
     "ScoreType",
     "StackFrame",
     "__version__",
+    "check_pii",
+    "check_secret",
+    "validate_record",
+    "validate_record_set",
 ]

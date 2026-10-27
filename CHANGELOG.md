@@ -40,6 +40,14 @@ and this project aims to adhere to [Semantic Versioning](https://semver.org/spec
   (candidate parity, metrics, reproducible reporting), and `docs/decision-gate.md`
   (Go/No-Go sequencing and handoff; numeric thresholds left as `TBD` pending
   pilot measurement and human approval).
+- `failurelens.quality`: pure, dependency-free **semantic quality gates** for
+  dataset records (beyond JSON Schema), implementing the `docs/data-contract.md`
+  table. `validate_record` / `validate_record_set` enforce the license,
+  candidate (positive + negative), rationale, pre/post validity,
+  environment-failure, secrets/PII, and duplicate gates, accumulating **all**
+  violations and recording a `GateRejectionReason` for each. Includes
+  deterministic `check_secret` / `check_pii` screeners and a regression test
+  that the committed fixture passes every gate.
 
 ### Notes
 - No trained FailureLens model is published yet; the baseline is fully functional.
