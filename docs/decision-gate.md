@@ -22,22 +22,37 @@ the baseline delivered at `main` commit `611bc0ea9aed8118b7afd637f97591f344eda07
 
 ## Sequencing (ordered gates)
 
-The gates run **in order**; do not begin a later stage before the earlier gate is
-cleared.
+The gates run **in order**. Approval of this design document is the first
+human-owner decision; it approves the *plan*, not implementation or scale-up.
+After that approval, only the following Gate A work may proceed using existing
+capabilities. Do not begin a later stage before its prerequisite is cleared.
 
-1. **Gate A — Pilot feasibility & baseline measurement.** Establish that a
-   **rights-cleared** data pilot is feasible (`docs/data-contract.md`) **and**
-   measure the existing baselines on identical conditions
-   (`docs/evaluation-protocol.md`). Output: feasibility finding + measured
-   baseline numbers.
+1. **Gate A — Pilot feasibility & baseline measurement.** The data steward may
+   check rights and manually assess a small rights-cleared pilot using existing
+   fixtures/tools; the independent evaluator may measure existing baselines on
+   identical conditions with the current harness (`docs/data-contract.md`,
+   `docs/evaluation-protocol.md`). Record the feasibility finding, measured
+   baseline numbers, conditions, and limitations. A one-case demo is not a
+   generalizable benchmark. Gate A does **not** authorize a new data pipeline,
+   model training, or scale-up. If existing capabilities cannot complete it,
+   report the blocker to the coordinator; do not silently start implementation.
 2. **Gate B — Freeze the acceptance criteria.** *After* Gate A, propose and obtain
    **human-owner approval** for the acceptance thresholds, resource budgets,
    sample size, and uncertainty treatment — **before** any trained-model result on
    held-out data is inspected. Output: the frozen table below.
-3. **Gate C — Trained-model evaluation (separate).** Only after Gate B is frozen,
-   the independent evaluator runs the comparison and produces a report. Execution
-   is a **separate** step from this design gate.
-4. **Gate D — Adoption / publication (separate).** The human owner decides on
+3. **Implementation Go/No-Go — explicit human decision.** After Gate B, the
+   coordinator presents the Gate A findings, frozen criteria, proposed scope and
+   risks, and a Go/No-Go recommendation to the human owner. Only a recorded
+   **human Go** permits the coordinator to open separately scoped `[IMPLEMENT]`
+   issues and begin their execution. A No-Go or missing decision means no such
+   issues or implementation. This decision does **not** authorize full-scale
+   training, data collection, or any release; those require separate approval.
+4. **Gate C — Trained-model evaluation (separate).** After the human Go, any
+   separately approved implementation, and the Gate B freeze, the independent
+   evaluator runs the comparison and produces a report. Evaluation execution is
+   **separate** from this design gate; no trained-model result may be inspected
+   before Gate B is frozen.
+5. **Gate D — Adoption / publication (separate).** The human owner decides on
    adoption and any dataset/model publication, subject to rights and licenses
    (`docs/security.md`, `docs/model-card.md`). This is **separate** from Gate C.
 
@@ -67,13 +82,13 @@ substituted for function labels (`docs/evaluation-protocol.md`).
 
 | Role | Owner | Responsibility |
 |------|-------|----------------|
-| Coordinator | `failurelens-coordinator` | Issue owner/review; **recommends** Go/No-Go; opens separate `[IMPLEMENT]` issues. |
-| Data | `failurelens-data-steward` | Rights matrix, pilot, label review, non-leaking splits. |
+| Coordinator | `failurelens-coordinator` | Issue owner/review; presents Gate A findings and Gate B criteria, **recommends** implementation Go/No-Go, and opens separate `[IMPLEMENT]` issues only after human Go. |
+| Data | `failurelens-data-steward` | Rights matrix, manual pilot feasibility, label review, non-leaking splits. |
 | Model feasibility | `failurelens-model-developer` | Base-model/training feasibility (no scale-up here). |
-| Independent evaluation | `failurelens-independent-evaluator` | Candidate parity, metrics, reproducible reports. |
-| Human owner | Project maintainer | **Approves** the design gate and later adoption/publication. |
+| Independent evaluation | `failurelens-independent-evaluator` | Existing-baseline measurement at Gate A; candidate parity, metrics, reproducible reports. |
+| Human owner | Project maintainer | **Approves** the design plan, Gate B freeze, implementation Go/No-Go, and later adoption/publication as distinct decisions. |
 
-- The coordinator **recommends** Go/No-Go; the **human owner approves**.
+- The coordinator **recommends** implementation Go/No-Go; only the **human owner decides**. Design approval and Gate B approval are not an implementation Go.
 - Large cross-cutting code changes belong in separately scoped `[IMPLEMENT]`
   issues and may be assigned to GitHub Copilot by the coordinator.
 - Specialists use the configured **rtx5060ti** node without sandboxing and their
@@ -99,5 +114,10 @@ full-scale training is authorized by issue #3 alone.
 - [ ] Numeric acceptance thresholds, resource budgets, sample size, and
       uncertainty plan are **frozen at Gate B with human approval**, before final
       trained-model evaluation (table above; no invented values).
-- [ ] Coordinator obtains **human Go/No-Go** before separate implementation
-      issues; evaluation execution and final adoption remain separate.
+- [ ] Human owner approves the design plan before manual Gate A work using
+      existing capabilities; record Gate A findings and any blockers without
+      starting new implementation.
+- [ ] After Gate A and the human-approved Gate B freeze, coordinator obtains a
+      recorded **human implementation Go/No-Go** before opening separate
+      `[IMPLEMENT]` issues or executing them. Evaluation execution, scale-up,
+      and final adoption/publication require their own decisions.

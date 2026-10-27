@@ -5,10 +5,11 @@ data the project may use, the rights each source carries, a small rights-cleared
 **pilot**, and the **semantic quality gates** that JSON Schema validation alone
 cannot enforce. It extends `docs/datasets.md` (the full dataset specification).
 
-> **Status: design only.** No large data and no fabricated labels ship in this
-> repository, and **no unapproved data is used**. The generation/collection
-> pipeline is planned (`datasets/` subdirectory READMEs). Implementing the gates
-> below belongs to separately scoped `[IMPLEMENT]` issues.
+> **Status: proposed design, awaiting human approval.** No large data and no
+> fabricated labels ship in this repository, and **no unapproved data is
+> used**. The generation/collection pipeline is planned (`datasets/`
+> subdirectory READMEs). Implementing the gates below belongs to separately
+> scoped `[IMPLEMENT]` issues.
 
 ## Principles
 
@@ -25,7 +26,9 @@ cannot enforce. It extends `docs/datasets.md` (the full dataset specification).
 Candidate sources and the rights that must be confirmed before use. SWE-smith and
 SWE-bench are **candidates, not pre-cleared datasets**. "Pending" means the right
 has not yet been verified; it must be resolved to an explicit value (with a
-citation) before that use.
+citation) before that use. Records with `source_license: "unknown"` may be
+quarantined for rights investigation only; they are not usable pilot, baseline,
+evaluation, or training data.
 
 | Source | Repo / version | License / terms | Training use | Redistribution | Log rights | Status |
 |--------|----------------|-----------------|--------------|----------------|-----------|--------|
@@ -81,7 +84,7 @@ a separate `[IMPLEMENT]` issue — today only the structural check in
 
 | Gate | Rule | Rejection reason recorded |
 |------|------|---------------------------|
-| License | `source_license` is a known SPDX id (not `unknown`); for any **redistributed** data it must also be on a redistribution allowlist. `unknown` is allowed only for internal, non-redistributed pilot records, and flagged. | `license-unknown` / `license-not-redistributable` |
+| License | `source_license` must be a verified, known SPDX id (not `unknown`) for pilot, baseline, evaluation, or training use; for any **redistributed** data it must also be on a redistribution allowlist. `unknown` records may only be quarantined for rights investigation and are rejected as `license-unknown`. | `license-unknown` / `license-not-redistributable` |
 | Candidates | At least one `positive` **and** at least one `negative` candidate; the array is non-empty. | `no-positive` / `no-negative` / `empty-candidates` |
 | Rationale | `label_rationale` is non-empty and explains the **root cause** vs the surfacing site. | `empty-rationale` |
 | Validity | `pre_change_result.status == "passed"` **and** `post_change_result.status == "failed"`, with failure attributable to the change. | `not-pass-before-fail-after` / `env-failure` |
