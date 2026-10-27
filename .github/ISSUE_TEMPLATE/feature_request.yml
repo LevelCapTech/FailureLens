@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an idea or enhancement for FailureLens.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and what is getting in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Library / API
+        - CLI
+        - Parsers (log formats / languages)
+        - Indexing
+        - Retrieval / ranking
+        - Models / training
+        - Evaluation / benchmarks
+        - Documentation
+        - Other
+    validations:
+      required: true

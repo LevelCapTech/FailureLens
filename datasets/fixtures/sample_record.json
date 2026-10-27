@@ -1,0 +1,52 @@
+{
+  "record_id": "sample_project-zerodivision-0001",
+  "dataset_id": "failurelens-fixtures",
+  "source_repository": "examples/fixtures/sample_project",
+  "source_commit": "0000000000000000000000000000000000000000",
+  "source_license": "Apache-2.0",
+  "language": "python",
+  "injection_method": "manual",
+  "injection_location": {
+    "file": "calculator/core.py",
+    "function": "average",
+    "start_line": 15,
+    "end_line": 22
+  },
+  "has_fix_patch": false,
+  "test_command": "python app.py",
+  "pre_change_result": {
+    "status": "passed",
+    "exit_code": 0,
+    "duration_ms": null
+  },
+  "post_change_result": {
+    "status": "failed",
+    "exit_code": 1,
+    "duration_ms": null
+  },
+  "error_log": "Traceback (most recent call last):\n  File \"app.py\", line 21, in <module>\n    main()\n  File \"calculator/core.py\", line 22, in average\n    return divide(total, len(values))\n  File \"calculator/core.py\", line 12, in divide\n    return numerator / denominator\nZeroDivisionError: division by zero\n",
+  "stack_trace": "app.py:21 -> calculator/core.py:22 (average) -> calculator/core.py:12 (divide)",
+  "candidates": [
+    {
+      "location": {
+        "file": "calculator/core.py",
+        "function": "average",
+        "start_line": 15,
+        "end_line": 22
+      },
+      "label": "positive"
+    },
+    {
+      "location": {
+        "file": "calculator/core.py",
+        "function": "divide",
+        "start_line": 6,
+        "end_line": 12
+      },
+      "label": "negative"
+    }
+  ],
+  "label_rationale": "The exception surfaces in divide(), but the root cause is average(), which does not guard against an empty input sequence; divide() is labelled negative because it is only the surfacing site. This record is a synthetic example built from the in-repository sample fixture, not mined third-party data.",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "generator_version": "0.1.0"
+}

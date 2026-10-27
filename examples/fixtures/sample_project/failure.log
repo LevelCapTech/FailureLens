@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "app.py", line 15, in <module>
+    main()
+  File "app.py", line 21, in main
+    report_scores([])
+  File "app.py", line 12, in report_scores
+    print(f"Average score: {average(scores)}")
+  File "calculator/core.py", line 22, in average
+    return divide(total, len(values))
+  File "calculator/core.py", line 12, in divide
+    return numerator / denominator
+ZeroDivisionError: division by zero

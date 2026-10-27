@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/LevelCapTech/FailureLens/datasets/schemas/record.schema.json",
+  "title": "FailureLens fault-localization data record",
+  "description": "Canonical schema for a single fault-localization training/evaluation record. Mirrors the data-quality fields required by the project issue (section 10.3). Labels must record their rationale; an injected-bug location is not assumed to equal the root cause.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "dataset_id",
+    "source_repository",
+    "source_commit",
+    "source_license",
+    "language",
+    "test_command",
+    "pre_change_result",
+    "post_change_result",
+    "error_log",
+    "candidates",
+    "label_rationale",
+    "generated_at",
+    "generator_version"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "description": "Unique identifier for this record."
+    },
+    "dataset_id": {
+      "type": "string",
+      "description": "Identifier of the dataset this record belongs to."
+    },
+    "source_repository": {
+      "type": "string",
+      "description": "Origin repository (URL or local identifier)."
+    },
+    "source_commit": {
+      "type": "string",
+      "description": "Pinned commit SHA of the source repository."
+    },
+    "source_license": {
+      "type": "string",
+      "description": "SPDX identifier (or 'unknown') of the source repository license."
+    },
+    "language": {
+      "type": "string",
+      "description": "Primary programming language of the target code (e.g. 'python')."
+    },
+    "injection_method": {
+      "type": ["string", "null"],
+      "description": "How the failure was introduced (e.g. 'mutation', 'real_bug', 'manual'). Null for naturally-occurring failures."
+    },
+    "injection_location": {
+      "description": "Where the change was introduced, if applicable. Null when not an injected bug.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/location" }
+      ]
+    },
+    "has_fix_patch": {
+      "type": "boolean",
+      "description": "Whether a fix patch is available for this failure."
+    },
+    "test_command": {
+      "type": "string",
+      "description": "Command used to run the target test(s)."
+    },
+    "pre_change_result": {
+      "$ref": "#/$defs/execution_result",
+      "description": "Result of running the test(s) on the clean state (expected: passed)."
+    },
+    "post_change_result": {
+      "$ref": "#/$defs/execution_result",
+      "description": "Result of running the test(s) after the change (expected: failed)."
+    },
+    "error_log": {
+      "type": "string",
+      "description": "Raw failure log/output."
+    },
+    "stack_trace": {
+      "type": ["string", "null"],
+      "description": "Extracted stack trace, if one was present."
+    },
+    "candidates": {
+      "type": "array",
+      "description": "Positive and negative candidate code units.",
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "label_rationale": {
+      "type": "string",
+      "description": "Explicit justification for the positive label(s). Must explain why the location is the root cause, not merely where the error surfaced."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when the record was generated."
+    },
+    "generator_version": {
+      "type": "string",
+      "description": "Version of the data-generation tooling."
+    }
+  },
+  "$defs": {
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "type": "string" },
+        "function": { "type": ["string", "null"] },
+        "start_line": { "type": ["integer", "null"], "minimum": 1 },
+        "end_line": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "execution_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "error", "skipped"]
+        },
+        "exit_code": { "type": ["integer", "null"] },
+        "duration_ms": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location", "label"],
+      "properties": {
+        "location": { "$ref": "#/$defs/location" },
+        "label": {
+          "type": "string",
+          "enum": ["positive", "negative"],
+          "description": "Whether this candidate is a confirmed cause (positive) or a non-cause (negative)."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# Normalize line endings on checkin; checkout native.
+* text=auto
+
+# Explicitly declare text files.
+*.py      text diff=python
+*.pyi     text diff=python
+*.md      text
+*.txt     text
+*.toml    text
+*.cfg     text
+*.ini     text
+*.yml     text
+*.yaml    text
+*.json    text
+*.log     text
+Makefile  text
+
+# Binary / model artifacts should never be line-ending munged.
+*.safetensors binary
+*.bin         binary
+*.pt          binary
+*.onnx        binary
+*.npy         binary
+*.npz         binary
+*.png         binary
+*.jpg         binary
+*.gz          binary
+*.zip         binary
+
+# Keep generated/vendored material out of language stats.
+docs/**        linguist-documentation
+examples/**    linguist-documentation

@@ -1,0 +1,60 @@
+# Repository-wide tooling configuration for the FailureLens monorepo.
+#
+# This file intentionally does NOT define a build target: the distributable
+# package lives in `packages/python/`. It centralizes lint/type/test config so
+# the same rules apply across the whole repo.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["packages/python/src", "packages/python/tests", "tests", "examples", "evaluation"]
+extend-exclude = ["examples/fixtures"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+files = ["packages/python/src/failurelens"]
+mypy_path = "packages/python/src"
+
+[[tool.mypy.overrides]]
+# The optional ML backend imports a third-party package that may be absent and
+# is untyped; do not fail type-checking of the core on its account.
+module = ["sentence_transformers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["packages/python/tests", "tests"]
+pythonpath = ["packages/python/src"]
+
+[tool.coverage.run]
+source = ["failurelens"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
