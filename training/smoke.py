@@ -29,10 +29,6 @@ def _git_sha() -> str:
     return completed.stdout.strip() or "unknown"
 
 
-def _default_output_dir() -> Path:
-    return Path("training/artifacts/toy-smoke")
-
-
 def _serialize_weights(weights: list[list[float]]) -> list[list[float]]:
     return [[float(value) for value in row] for row in weights]
 

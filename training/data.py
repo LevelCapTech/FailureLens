@@ -7,10 +7,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator
+
 from failurelens.quality import validate_record
 from training.config import DEFAULT_EXCLUDED_REPOS
 
 EXCLUDED_REPOS = DEFAULT_EXCLUDED_REPOS
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_SCHEMA_PATH = _REPO_ROOT / "datasets/schemas/record.schema.json"
 
 
 @dataclass(frozen=True)
@@ -23,31 +27,16 @@ class TrainingExample:
 
 
 def _validate_schema(record: dict[str, Any]) -> None:
-    required = {
-        "record_id",
-        "dataset_id",
-        "source_repository",
-        "source_commit",
-        "source_license",
-        "language",
-        "test_command",
-        "pre_change_result",
-        "post_change_result",
-        "error_log",
-        "candidates",
-        "label_rationale",
-        "generated_at",
-        "generator_version",
-    }
-    missing = sorted(required - set(record))
-    if missing:
-        raise ValueError(f"record missing required fields: {', '.join(missing)}")
-    if not isinstance(record["error_log"], str):
-        raise ValueError("error_log must be a string")
-    if not isinstance(record["candidates"], list):
-        raise ValueError("candidates must be a list")
-    if not isinstance(record["label_rationale"], str):
-        raise ValueError("label_rationale must be a string")
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(record), key=lambda item: list(item.path))
+    if errors:
+        first = errors[0]
+        location = ".".join(str(part) for part in first.path) or "<root>"
+        raise ValueError(
+            "record failed JSON schema validation against "
+            f"{_SCHEMA_PATH.as_posix()}: {location}: {first.message}"
+        )
 
 
 def _validate_repository(record: dict[str, Any]) -> str:
@@ -73,7 +62,23 @@ def _positive_negative_examples(record: dict[str, Any]) -> tuple[str, str]:
     neg_location = negative.get("location")
     if not isinstance(pos_location, dict) or not isinstance(neg_location, dict):
         raise ValueError("candidate locations must be objects")
-    return str(pos_location.get("file", "positive")), str(neg_location.get("file", "negative"))
+    return _candidate_text(pos_location), _candidate_text(neg_location)
+
+
+def _candidate_text(location: dict[str, Any]) -> str:
+    file_path = str(location.get("file", "")).strip()
+    function = str(location.get("function") or "").strip()
+    start_line = location.get("start_line")
+    end_line = location.get("end_line")
+    location_text = [file_path]
+    if function:
+        location_text.append(f"function={function}")
+    if isinstance(start_line, int):
+        if isinstance(end_line, int):
+            location_text.append(f"lines={start_line}-{end_line}")
+        else:
+            location_text.append(f"line={start_line}")
+    return " :: ".join(part for part in location_text if part)
 
 
 def load_training_examples(dataset_path: str | Path | None = None) -> list[TrainingExample]:
@@ -98,12 +103,9 @@ def load_training_examples(dataset_path: str | Path | None = None) -> list[Train
     pos_file, neg_file = _positive_negative_examples(record)
     dataset_version = str(record.get("dataset_id", "fixture-v1"))
     query = str(record.get("error_log", "")).strip()
-    positive = (
-        f"{record.get('label_rationale', '')} :: {pos_file} :: {record.get('source_repository', '')}"
-    ).strip()
-    negative = (
-        f"{record.get('label_rationale', '')} :: {neg_file} :: {record.get('source_repository', '')}"
-    ).strip()
+    repository = str(record.get("source_repository", "")).strip()
+    positive = f"{repository} :: {pos_file}".strip()
+    negative = f"{repository} :: {neg_file}".strip()
     return [
         TrainingExample(
             query=query,

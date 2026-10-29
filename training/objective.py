@@ -68,13 +68,12 @@ class InfoNCEObjective:
         denom = exp_pos + exp_neg
         loss = math.log(denom) - sim_pos
 
-        prob_pos = exp_pos / denom
+        prob_neg = exp_neg / denom
         grad_q = [
-            (exp_neg / denom) * (neg_value - pos_value)
-            for pos_value, neg_value in zip(p, n, strict=True)
+            prob_neg * (neg_value - pos_value) for pos_value, neg_value in zip(p, n, strict=True)
         ]
-        grad_p = [-(exp_neg / denom) * value for value in q]
-        grad_n = [prob_pos * value for value in q]
+        grad_p = [-prob_neg * value for value in q]
+        grad_n = [prob_neg * value for value in q]
 
         features = [
             encoder._features(query),
