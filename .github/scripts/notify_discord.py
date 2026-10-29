@@ -23,8 +23,12 @@ def notification(event_name: str, event: dict) -> str | None:
 
     action = event.get("action")
     pr = event.get("pull_request")
-    if event_name == "pull_request_target" and action == "opened" and pr:
-        kind = "PR作成"
+    if (
+        event_name == "pull_request_target"
+        and pr
+        and (action == "opened" or (action == "closed" and pr.get("merged") is True))
+    ):
+        kind = "PR作成" if action == "opened" else "PRマージ"
         url = pr.get("html_url")
         number = pr.get("number")
     else:
