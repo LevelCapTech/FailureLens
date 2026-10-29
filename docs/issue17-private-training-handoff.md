@@ -1,6 +1,6 @@
 # Issue #17 — private synthetic training handoff
 
-Status: initial **train-only feasibility set**, generated 2026-10-30 on `rtx5060ti`. This is not a public dataset, a trained model, or evidence of production failure-localization accuracy. The individual records and generator remain outside Git at `~/.local/share/failurelens/train-issue17-v1/` (directory mode 700; private artifacts mode 600). This same-user permission boundary is procedural, not isolation from processes using that account.
+Status: **v2 private correction completed** on 2026-10-30; v1 below is retained as historical evidence and is **not label-approved**. This is not a public dataset, a trained model, or evidence of production failure-localization accuracy. The individual records and generators for both versions remain outside Git in the private locations below (directory mode 700; private artifacts mode 600). This same-user permission boundary is procedural, not isolation from processes using that account.
 
 ## Rights and source reservation
 
@@ -21,4 +21,16 @@ The private manifest reserves only `pallets/click` and `python-attrs/attrs` for 
 - `datasets/schemas/record.schema.json` (Draft 2020-12 + format checker): **0 violations**. `failurelens.quality.validate_record_set(records, redistributed=True)`: **12/12 passed, 0 rejections**. Duplicate IDs/signatures: **0**. Secret/PII screener hits in accepted logs: **0**. These heuristic gates do not prove the absence of all sensitive data or semantic label errors.
 - Private `records.json` SHA-256: `ce9112ab48f4edca14758d2b64e16b605e878c042c65f26af0c8aa5675185b1c`. Recheck privately with `sha256sum ~/.local/share/failurelens/train-issue17-v1/records.json`; rerun with `python3 ~/.local/share/failurelens/train-issue17-v1/generate.py` (regeneration changes timestamps and the digest).
 
-Each record includes positive source-cause and negative assertion-surfacing candidates. These are simple synthetic early-return faults, heavily concentrated in a few modules, not natural defects. The label rationales are deterministic attribution to the injected change; independent human quality review and broader fault diversity are still needed before using this for model-quality claims. No GPU training, model upload, or external dataset publication occurred.
+The v1 candidate and rationale summary above is historical: independent review identified non-source negative locations and explanations that incorrectly claimed assertion failure when an exception occurred earlier. Do not use v1 labels as approved training truth. These are simple synthetic early-return faults, heavily concentrated in a few modules, not natural defects. No GPU training, model upload, or external dataset publication occurred.
+
+## Private v2 correction (2026-10-30)
+
+The corrected private version is at `~/.local/share/failurelens/train-issue17-v2/`; v1 remains unchanged. The private generator and individual records are **not** in Git. Private `records.json` SHA-256: `74909f51b588c311de798bee29b748cfc1ead65fd2948053c8f3a1c729e465c1`.
+
+- **12/12 accepted**, split **6/6** between the same two pinned, rights-reviewed train-only source repositories. All 12 clean probes exited 0; all 12 changed probes exited 1. There were 4 early-return, 4 wrong-value-return, and 4 explicit-exception mutations; observed failures comprised 4 assertion, 3 type, 1 attribute, and 4 runtime exceptions.
+- Each negative is now an existing same-module source function, confirmed at its pinned source lines and observed uncalled in both clean and changed profiled probes; the positive function was observed called in both. Rationales distinguish assertions reached after a changed return value from exceptions that occurred before the assertion. Source locations, terminal exceptions, and rationales were reviewed for all 12.
+- Draft 2020-12 schema: **0 violations**. Semantic quality gate: **12/12 passed, 0 rejections**. Duplicate IDs and exact signatures: **0**. Pairwise near-signature check (source repository, location, mutation method, probe; similarity threshold 0.90): **0 flagged**, maximum 0.832. Secret/PII heuristic gates: **0 hits**. Source clones were restored clean after each mutation.
+- Train/eval source-repository intersection remains **0** by reservation. No held-out records, labels, or generator were opened. This is not a case-level or semantic proof of non-leakage; it relies on disjoint pinned source repositories.
+- Limitations: only 12 synthetic, single-function, single-probe examples across a small number of modules and exception types. Negatives are uncalled adjacent functions rather than hard executed-but-noncausal candidates. The three insertion-style mutation mechanisms are not representative of natural production defects. The automated checks and source review do not constitute independent human label approval, Gate C accuracy, redistribution authorization, or model-readiness.
+
+No model training, Hugging Face publication, or case-level GitHub release occurred.
