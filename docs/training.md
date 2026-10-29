@@ -1,8 +1,9 @@
 # Training
 
-Specification for the (future) FailureLens model training pipeline. It reflects
-the project charter (§11–12). **Status: design + scaffolding.** No training code
-or trained weights exist yet; the library works today via the baseline.
+Specification for the FailureLens training pipeline. This repo now includes a
+small, CPU-only toy pipeline used to validate the training contract without
+network access or pretrained weights. It is intentionally limited to local
+fixture data and is not a production model release.
 
 ## Scope and task
 

@@ -1,0 +1,17 @@
+{
+  "base_model": "toy-bi-encoder",
+  "revision": "train-toy-0.1.0",
+  "dataset": "datasets/fixtures/sample_record.json",
+  "dataset_version": "fixture-v1",
+  "seed": 7,
+  "optimizer": "adamw",
+  "learning_rate": 0.05,
+  "batch_size": 1,
+  "epochs": 3,
+  "max_length": 32,
+  "objective": "infonce",
+  "mixed_precision": false,
+  "output_dir": "training/experiments/toy-smoke",
+  "val_interval": 1,
+  "early_stopping": false
+}
