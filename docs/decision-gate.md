@@ -58,35 +58,38 @@ capabilities. Do not begin a later stage before its prerequisite is cleared.
 
 ## Acceptance-criteria freeze (values set at Gate B)
 
-These values are deliberately **unset**. They must be proposed **after** pilot and
-baseline measurement (Gate A) and frozen with **human-owner approval** (Gate B),
-**before** inspecting any trained-model held-out results. **Do not invent them.**
+The human owner approved the following initial acceptance criteria on 2026-10-29,
+after Gate A and before any trained-model held-out results. This freezes the
+evaluation targets, not model implementation or publication.
 
 | Criterion | Value | Set when | Approver |
 |-----------|-------|----------|----------|
-| Primary KPI — function-level Top-1 | **Proposed 0.4** (baseline 0.0) | Gate B (post-pilot) | Human owner |
-| Primary KPI — function-level MRR | **Proposed 0.6** (baseline 0.5) | Gate B (post-pilot) | Human owner |
-| Minimum improvement over best baseline | **Proposed: Top-1 +0.4 absolute (0.0→0.4); MRR +0.1 absolute (0.5→0.6)** | Gate B (post-pilot) | Human owner |
-| Evaluation case count (sample size) | **Proposed ≥ 30 cases across rights-cleared repos (Gate A pilot was n=1; not generalizable)** | Gate B (post-pilot) | Human owner |
-| Evaluation repository count | **Proposed ≥ 3 distinct rights-cleared repositories (Gate A pilot was 1 repo; no independent eval set possible)** | Gate B (post-pilot) | Human owner |
-| Uncertainty treatment | **Proposed: deterministic harness (no sampling); report min/median/max over 3 seeded reruns on identical conditions; report confidence intervals on Top-1 and MRR** | Gate B (post-pilot) | Human owner |
-| Latency budget | **Proposed: p95 ≤ 5 s per case on the evaluation environment (to be measured against the actual base model at implementation)** | Gate B (post-pilot) | Human owner |
-| Memory budget | **Proposed: peak ≤ 8 GiB on the evaluation environment (to be measured against the actual base model at implementation)** | Gate B (post-pilot) | Human owner |
-| Model-size budget | **Proposed: ≤ 1 B parameters for the first trained model (bi-encoder, per `docs/model-card.md` "Planned model")** | Gate B (post-pilot) | Human owner |
+| Primary KPI — function-level Top-1 | **Frozen ≥ 0.4** (baseline 0.0) | Gate B (post-pilot) | Human owner |
+| Primary KPI — function-level MRR | **Frozen ≥ 0.6** (baseline 0.5) | Gate B (post-pilot) | Human owner |
+| Minimum improvement over best baseline | **Frozen: Top-1 +0.4 absolute (0.0→0.4); MRR +0.1 absolute (0.5→0.6)** | Gate B (post-pilot) | Human owner |
+| Evaluation case count (sample size) | **Frozen ≥ 30 cases across rights-cleared repos (Gate A pilot was n=1; not generalizable)** | Gate B (post-pilot) | Human owner |
+| Evaluation repository count | **Frozen ≥ 3 distinct rights-cleared repositories (Gate A pilot was 1 repo; no independent eval set possible)** | Gate B (post-pilot) | Human owner |
+| Uncertainty treatment | **Frozen: deterministic harness (no sampling); report min/median/max over 3 seeded reruns on identical conditions; report confidence intervals on Top-1 and MRR** | Gate B (post-pilot) | Human owner |
+| Latency budget | **Frozen: p95 ≤ 5 s per case on the evaluation environment (to be measured against the actual base model at implementation)** | Gate B (post-pilot) | Human owner |
+| Memory budget | **Frozen: peak ≤ 8 GiB on the evaluation environment (to be measured against the actual base model at implementation)** | Gate B (post-pilot) | Human owner |
+| Model-size budget | **Frozen: ≤ 1 B parameters for the first trained model (bi-encoder, per `docs/model-card.md` "Planned model")** | Gate B (post-pilot) | Human owner |
 
 Function-level Top-1 and MRR are the primary KPIs **where function labels exist**;
 file-level metrics and resource measurements are reported separately and never
 substituted for function labels (`docs/evaluation-protocol.md`).
 
-> **Status of the proposed values (2026-10-27, Gate A cleared):** these are the
-> coordinator's *proposed* values, derived from the Gate A pilot and the measured
+> **Status (2026-10-29):** the human owner approved the complete initial table in
+> the FailureLens coordinator thread (messages `1565358830869811251` and
+> `1565359271250759742`). The values derive from the Gate A pilot and measured
 > stack-trace-lexical baseline (`evaluation/reports/gateA-baseline-2026-10-27.json`).
-> They are **not** frozen: Gate B is not complete until the **human owner** reviews,
-> adjusts, and records approval. The two hard preconditions for the proposed sample
-> and repository counts are: (1) the additional rights-cleared repositories are
-> identified and confirmed usable, and (2) an independent eval set (disjoint from
-> training data, per `docs/evaluation-protocol.md`) can be constructed. Until those
-> are met, the values above remain proposals, not a frozen table.
+> This freezes the criteria only. PR #12 documented 30 synthetic held-out cases
+> from three rights-checked repositories, but the future actual training corpus
+> does not yet exist; verify its non-overlap before independent Gate C evaluation.
+> The owner selected procedural non-disclosure of held-out labels rather than
+> enforced OS isolation, which is a limitation to report. The owner separately
+> authorized starting the scoped implementation on 2026-10-29 (message
+> `1565360666217283707`). This is not a publication Go; adoption and release
+> require review of the actual trained artifact, evaluation, and rights.
 
 ## Ownership and handoff
 
