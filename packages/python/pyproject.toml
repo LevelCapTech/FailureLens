@@ -45,6 +45,7 @@ ml = [
     "sentence-transformers>=5.6.0",
     "huggingface-hub>=0.24.0",
     "safetensors>=0.4.3",
+    "einops>=0.7.0",
     "numpy>=1.26.0",
 ]
 # Training/evaluation extras build on top of the ml stack.
