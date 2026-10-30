@@ -320,6 +320,12 @@ def test_independent_runner_aggregate_and_na(tmp_path: Path) -> None:
         "repositories": 3,
         "function_labeled": 3,
         "function_missing": 0,
+        "retrieval_abstentions": 0,
+        "retrieval_abstention_rate": 0.0,
+        "positive_file_absent_from_pool": 0,
+        "positive_function_absent_from_pool": 0,
+        "retrieved_pool_file_recall": 1.0,
+        "retrieved_pool_function_recall": 1.0,
     }
     assert [run["seed"] for run in report["runs"]] == [20261030, 20261031, 20261032]
     assert report["summary"]["model"]["top1"]["median"] == 0.0
