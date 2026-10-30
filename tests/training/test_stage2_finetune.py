@@ -5,19 +5,26 @@ Skip unless ``--run-ml-integration`` is passed.
 
 Verifies:
 1. load_stage2_examples() reconstructs 12 examples (6 train, 6 val).
-2. No generator marker (``# issue17 injected fault``) appears in positive,
-   query, or negative texts for ALL 12 examples (fail-closed).
-3. Positive texts are byte-identical to an independent second reconstruction
+2. No generator marker (``# issue17 injected fault``) in any of 12 positive/
+   query/negative texts (fail-closed).
+3. No private absolute paths in any of 12 query/positive/negative texts
+   (fail-closed).
+4. No generator-specific injected exception messages in any of 12 query/
+   positive texts (fail-closed).
+5. Positive texts are byte-identical to an independent second reconstruction
    from the same private source files (digest proof).
-4. Positive != negative texts (not clean-only source).
-5. Full run produces monotonically decreasing or stable train loss.
-6. Checkpoint/resume: epoch 3 loss from resumed run matches full run within 1e-5.
-7. Final artifact is safetensors and has a valid SHA256 digest.
-8. No .bin files in the model cache (safetensors-only loader).
+6. Positive != negative texts (not clean-only source).
+7. Full run produces monotonically decreasing or stable train loss.
+8. Checkpoint/resume: epoch 3 loss from resumed run matches full run within 1e-5.
+9. Final artifact is safetensors and has a valid SHA256 digest.
+10. No .bin files in the model cache (safetensors-only loader).
+11. _find_function_node matches by name+line range and fails on ambiguity or
+    incorrect location (unit tests, always run).
 """
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -29,6 +36,13 @@ _STAGE1_MODEL_CACHE = (
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
 _SNAPSHOT_PATH = _STAGE1_MODEL_CACHE / "models--nomic-ai--CodeRankEmbed" / "snapshots" / _REVISION
 _GENERATOR_MARKER = "# issue17 injected fault"
+
+# Private absolute path pattern: any string containing the private data root prefix
+_PRIVATE_PATH_NEEDLE = "/failurelens/train-issue17-v2/sources/"
+
+# Generator-specific injected exception message pattern
+_INJECTED_MSG_NEEDLE = "injected "
+_INJECTED_MSG_PATTERN = "fault"
 
 
 def _require_ml_integration(request: pytest.FixtureRequest) -> None:
@@ -116,6 +130,88 @@ def stage2_resumed(request: pytest.FixtureRequest, stage2_examples, stage2_run, 
     return result
 
 
+class TestFindFunctionNodeUnit:
+    """Unit tests for _find_function_node — always run (no ML gate required)."""
+
+    def _make_tree(self, source: str) -> ast.Module:
+        return ast.parse(source)
+
+    def test_finds_unique_function(self) -> None:
+        from training.data_stage2 import _find_function_node
+
+        src = "def foo():\n    pass\n"
+        tree = self._make_tree(src)
+        node = _find_function_node(tree, "foo", start_line=1, end_line=2)
+        assert node.name == "foo"
+        assert node.lineno == 1
+
+    def test_wrong_start_line_raises(self) -> None:
+        from training.data_stage2 import _find_function_node
+
+        src = "def foo():\n    pass\n"
+        tree = self._make_tree(src)
+        with pytest.raises(ValueError, match="not at expected start_line"):
+            _find_function_node(tree, "foo", start_line=99, end_line=2)
+
+    def test_missing_function_raises(self) -> None:
+        from training.data_stage2 import _find_function_node
+
+        src = "def bar():\n    pass\n"
+        tree = self._make_tree(src)
+        with pytest.raises(ValueError, match="not found in parsed AST"):
+            _find_function_node(tree, "foo", start_line=1, end_line=2)
+
+    def test_duplicate_name_resolved_by_start_line(self) -> None:
+        """Two functions with the same name in different scopes — select by start_line."""
+        from training.data_stage2 import _find_function_node
+
+        src = (
+            "def foo():\n"  # line 1
+            "    pass\n"  # line 2
+            "\n"  # line 3
+            "class C:\n"  # line 4
+            "    def foo(self):\n"  # line 5
+            "        pass\n"  # line 6
+        )
+        tree = self._make_tree(src)
+        node1 = _find_function_node(tree, "foo", start_line=1, end_line=2)
+        assert node1.lineno == 1
+        node5 = _find_function_node(tree, "foo", start_line=5, end_line=6)
+        assert node5.lineno == 5
+
+    def test_duplicate_name_same_line_ambiguity_raises(self) -> None:
+        """Synthetic case: two AST nodes with the same name at the same line raises."""
+        from training.data_stage2 import _find_function_node
+
+        src = "def foo():\n    pass\n"
+        tree = self._make_tree(src)
+        # Manually clone the node to simulate ambiguity
+        original = tree.body[0]
+        assert isinstance(original, ast.FunctionDef)
+        clone = ast.FunctionDef(
+            name="foo",
+            args=original.args,
+            body=original.body,
+            decorator_list=[],
+            returns=None,
+            lineno=1,
+            col_offset=0,
+            end_lineno=2,
+            end_col_offset=8,
+        )
+        tree.body.append(clone)
+        with pytest.raises(ValueError, match="Ambiguous"):
+            _find_function_node(tree, "foo", start_line=1, end_line=2)
+
+    def test_wrong_end_line_raises(self) -> None:
+        from training.data_stage2 import _find_function_node
+
+        src = "def foo():\n    pass\n"
+        tree = self._make_tree(src)
+        with pytest.raises(ValueError, match="ends at line"):
+            _find_function_node(tree, "foo", start_line=1, end_line=99)
+
+
 class TestStage2DataReconstruction:
     def test_split_counts(self, stage2_examples) -> None:
         train, val = stage2_examples
@@ -155,6 +251,61 @@ class TestStage2DataReconstruction:
             assert _GENERATOR_MARKER not in ex.negative, (
                 f"Generator marker found in negative text for {ex.record_id!r}: "
                 f"feature contains label signal"
+            )
+
+    def test_no_private_paths_in_query(self, stage2_examples) -> None:
+        """Fail-closed: private absolute paths must be ABSENT from all 12 query texts."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            assert _PRIVATE_PATH_NEEDLE not in ex.query, (
+                f"Private generation path found in query for {ex.record_id!r}: "
+                f"feature contains private path signal"
+            )
+
+    def test_no_private_paths_in_positive(self, stage2_examples) -> None:
+        """Fail-closed: private absolute paths must be ABSENT from all 12 positive texts."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            assert _PRIVATE_PATH_NEEDLE not in ex.positive, (
+                f"Private generation path found in positive for {ex.record_id!r}: "
+                f"feature contains private path signal"
+            )
+
+    def test_no_private_paths_in_negative(self, stage2_examples) -> None:
+        """Fail-closed: private absolute paths must be ABSENT from all 12 negative texts."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            assert _PRIVATE_PATH_NEEDLE not in ex.negative, (
+                f"Private generation path found in negative for {ex.record_id!r}: "
+                f"feature contains private path signal"
+            )
+
+    def test_no_injected_exception_msg_in_query(self, stage2_examples) -> None:
+        """Fail-closed: injected exception messages must be ABSENT from all 12 queries."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            # "injected X fault" is the generator-specific exception message pattern
+            lower = ex.query.lower()
+            has_injected_msg = _INJECTED_MSG_NEEDLE in lower and _INJECTED_MSG_PATTERN in lower
+            assert not has_injected_msg, (
+                f"Generator-specific injected exception message found in query "
+                f"for {ex.record_id!r}: feature contains label signal"
+            )
+
+    def test_no_injected_exception_msg_in_positive(self, stage2_examples) -> None:
+        """Fail-closed: injected exception messages must be ABSENT from all 12 positives."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            lower = ex.positive.lower()
+            has_injected_msg = _INJECTED_MSG_NEEDLE in lower and _INJECTED_MSG_PATTERN in lower
+            assert not has_injected_msg, (
+                f"Generator-specific injected exception message found in positive "
+                f"for {ex.record_id!r}: feature contains label signal"
             )
 
     def test_positive_differs_from_negative(self, stage2_examples) -> None:
@@ -238,6 +389,19 @@ class TestStage2DataReconstruction:
             rationale: str = rec.get("label_rationale", "")
             assert ex.positive != rationale, f"Positive is label_rationale for {ex.record_id!r}"
             assert ex.negative != rationale, f"Negative is label_rationale for {ex.record_id!r}"
+
+    def test_source_commits_match_pinned_heads(self, stage2_examples) -> None:
+        """source_commit in each record must match the pinned source repo HEAD."""
+        import json as _json
+
+        # load_stage2_examples already calls _verify_source_commits; this test
+        # confirms the verification ran without raising (fixture succeeded).
+        # Additional explicit check: re-run verification directly.
+        from training.data_stage2 import _verify_source_commits
+
+        records = _json.loads((_PRIVATE_DATA_ROOT / "records.json").read_text())
+        # Should not raise
+        _verify_source_commits(records, _PRIVATE_DATA_ROOT)
 
 
 class TestStage2Finetune:

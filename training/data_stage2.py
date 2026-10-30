@@ -17,9 +17,12 @@ Reconstruction method (aggregate, no individual labels here):
   numbers are authoritative and the full function body is included.
 - The isolated copy is a tmpdir; the original source file is never modified.
 
-Generator marker ``# issue17 injected fault`` is STRIPPED from all three
-features (query, positive, negative) before they are returned.  No
-model-visible text carries this label signal.
+Generator signals stripped from all three features (query, positive, negative):
+- Marker comment ``# issue17 injected fault``.
+- Private absolute paths inside traceback ``File "..."`` lines (replaced with
+  the source-relative path only).
+- Generator-specific injected exception messages such as ``"injected X fault"``
+  (replaced with ``""`` to preserve the exception type/category).
 
 Constraints honoured:
 - ``label_rationale``, ground-truth markers, and invented identifiers are NOT
@@ -38,7 +41,9 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
 import shutil
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +67,25 @@ _VAL_REPO: str = "python-attrs/attrs"
 # training feature passed to the model.
 _GENERATOR_MARKER: str = "# issue17 injected fault"
 
+# Private absolute path prefix inside traceback File "..." entries.
+# Captures the source-relative portion after /sources/{repo_key}/.
+_PRIVATE_SOURCE_PATH_RE: re.Pattern[str] = re.compile(
+    r'(?<=")/[^"]+/sources/(?:click|attrs)/([^"]+)(?=")'
+)
+
+# Generator-specific injected exception message in a quoted-string context,
+# e.g. RuntimeError("injected short-help fault").  Replaced with "" to
+# preserve the exception type/category without the generator label.
+_INJECTED_QUOTED_MSG_RE: re.Pattern[str] = re.compile(r'"injected [^"]*"')
+
+# Generator-specific injected exception message in the final traceback summary
+# line, e.g. "RuntimeError: injected short-help fault".  Replaced with the
+# exception type alone to preserve the fault category.
+_INJECTED_TRAILING_MSG_RE: re.Pattern[str] = re.compile(
+    r"^(\s*\w[\w.]*(?:Error|Exception)\w*): injected .+$",
+    re.MULTILINE,
+)
+
 
 @dataclass(frozen=True)
 class Stage2Example:
@@ -83,14 +107,64 @@ def _verify_data_digest(records_path: Path) -> None:
         )
 
 
-def _strip_generator_marker(text: str) -> str:
-    """Remove the private generator marker from every line in *text*.
+def _verify_source_commits(records: list[dict[str, Any]], root: Path) -> None:
+    """Verify each record's source_commit against the pinned source repo HEAD.
 
-    The marker ``# issue17 injected fault`` appears as an inline comment
-    appended to injected source lines and is echoed verbatim in error_log
-    tracebacks.  Stripping it ensures that no model-visible feature contains
-    generator-specific label information.
+    Ensures the private source files match the exact commits recorded in the
+    dataset, so reconstructed function texts are reproducible and tied to a
+    known clean snapshot.
     """
+    expected: dict[str, str] = {}
+    for rec in records:
+        repo: str = rec["source_repository"]
+        commit: str = rec["source_commit"]
+        if (
+            repo in expected
+            and not expected[repo].startswith(commit)
+            and not commit.startswith(expected[repo])
+        ):
+            raise ValueError(
+                f"Inconsistent source_commit for {repo!r}: {expected[repo]!r} vs {commit!r}"
+            )
+        expected[repo] = commit
+
+    for repo, commit in expected.items():
+        repo_key = _REPO_SOURCE_KEYS[repo]
+        source_dir = root / "sources" / repo_key
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=source_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            raise ValueError(
+                f"Cannot determine HEAD of source repo {repo!r} at {source_dir}: {exc}"
+            ) from exc
+        actual = result.stdout.strip()
+        if not actual.startswith(commit) and not commit.startswith(actual[: len(commit)]):
+            raise ValueError(
+                f"Source repo {repo!r} HEAD is {actual!r} "
+                f"but dataset records expect commit {commit!r}. "
+                "Ensure the private source snapshot matches the dataset version."
+            )
+
+
+def _strip_generator_marker(text: str) -> str:
+    """Remove ALL generator-specific signals from feature text.
+
+    Strips:
+    - The ``# issue17 injected fault`` inline comment from every line.
+    - Private absolute paths inside traceback ``File "..."`` entries,
+      keeping only the source-relative portion.
+    - Generator-specific injected exception messages (``"injected X fault"``),
+      replacing them with ``""`` to preserve exception type/category.
+    - Generator-specific injected exception messages in traceback summary lines
+      (e.g. ``RuntimeError: injected X fault``), keeping only the type name.
+    """
+    # Step 1: strip the inline marker comment
     lines = text.splitlines(keepends=True)
     result: list[str] = []
     for line in lines:
@@ -100,7 +174,18 @@ def _strip_generator_marker(text: str) -> str:
             idx = content.index(_GENERATOR_MARKER)
             content = content[:idx].rstrip()
         result.append(content + newline)
-    return "".join(result)
+    text = "".join(result)
+
+    # Step 2: strip private absolute paths, keep source-relative path only
+    text = _PRIVATE_SOURCE_PATH_RE.sub(r"\1", text)
+
+    # Step 3: strip generator-specific injected exception message strings
+    text = _INJECTED_QUOTED_MSG_RE.sub('""', text)
+
+    # Step 4: strip injected message from traceback summary lines
+    text = _INJECTED_TRAILING_MSG_RE.sub(r"\1", text)
+
+    return text
 
 
 def _reconstruct_injection_statement(record: dict[str, Any]) -> str:
@@ -129,11 +214,47 @@ def _reconstruct_injection_statement(record: dict[str, Any]) -> str:
     raise ValueError(f"Unknown injection_method: {method!r}")
 
 
-def _find_function_node(tree: ast.Module, func_name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name:
-            return node
-    raise ValueError(f"Function {func_name!r} not found in parsed AST")
+def _find_function_node(
+    tree: ast.Module,
+    func_name: str,
+    start_line: int,
+    end_line: int,
+) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    """Find function by name AND line range; fail on ambiguity or location mismatch.
+
+    Collects all top-level and nested function definitions named ``func_name``.
+    If multiple definitions exist (e.g. duplicate names in different scopes),
+    ``start_line`` is used to select the unique match.  Raises ``ValueError``
+    if the match is ambiguous, absent, or at the wrong location.
+    """
+    all_named: list[ast.FunctionDef | ast.AsyncFunctionDef] = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name
+    ]
+    if not all_named:
+        raise ValueError(f"Function {func_name!r} not found in parsed AST")
+
+    matching = [n for n in all_named if n.lineno == start_line]
+    if not matching:
+        candidates = [(n.lineno, getattr(n, "end_lineno", "?")) for n in all_named]
+        raise ValueError(
+            f"Function {func_name!r} exists at {candidates} "
+            f"but not at expected start_line={start_line}"
+        )
+    if len(matching) > 1:
+        raise ValueError(
+            f"Ambiguous: {len(matching)} definitions of {func_name!r} "
+            f"all start at line {start_line}"
+        )
+    node = matching[0]
+    actual_end = getattr(node, "end_lineno", None)
+    if actual_end is not None and actual_end != end_line:
+        raise ValueError(
+            f"Function {func_name!r} at line {start_line} ends at line {actual_end} "
+            f"but expected end_line={end_line}"
+        )
+    return node
 
 
 def _extract_mutated_function_text(
@@ -158,7 +279,7 @@ def _extract_mutated_function_text(
 
         text = isolated.read_text(encoding="utf-8")
         tree = ast.parse(text)
-        node = _find_function_node(tree, func_name)
+        node = _find_function_node(tree, func_name, start_line, end_line)
 
         insert_at = node.body[0].lineno - 1  # 0-indexed, before first body stmt
         indent = " " * node.body[0].col_offset
@@ -191,8 +312,8 @@ def load_stage2_examples(
     Returns ``(train_examples, val_examples)`` using a repo-level 6/6 split:
     ``pallets/click`` -> train, ``python-attrs/attrs`` -> val.
 
-    Generator markers are stripped from all features before the examples are
-    returned; no ``# issue17 injected fault`` annotation reaches the model.
+    Generator markers and private signals are stripped from all features before
+    the examples are returned; no generator-specific information reaches the model.
     """
     root = data_root if data_root is not None else PRIVATE_DATA_ROOT
     records_path = root / "records.json"
@@ -207,6 +328,8 @@ def load_stage2_examples(
         _verify_data_digest(records_path)
 
     records: list[dict[str, Any]] = json.loads(records_path.read_text(encoding="utf-8"))
+
+    _verify_source_commits(records, root)
 
     train: list[Stage2Example] = []
     val: list[Stage2Example] = []
