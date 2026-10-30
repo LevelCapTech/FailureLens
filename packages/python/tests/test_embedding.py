@@ -129,10 +129,13 @@ def test_allowlist_rejects_unpinned_other_repo() -> None:
         _check_trust_remote_code_allowlist("some-other/Model", None)
 
 
-def test_allowlist_accepts_local_snapshot_path(tmp_path: Path) -> None:
-    snapshot_dir = tmp_path / _NOMIC_CODERANKEEMBED_AUDITED_REVISION
-    snapshot_dir.mkdir()
-    _check_trust_remote_code_allowlist(str(snapshot_dir), None)
+def test_allowlist_rejects_local_path_with_correct_name(tmp_path: Path) -> None:
+    # A directory whose name matches the audited SHA must still be rejected:
+    # directory name alone cannot prove the contents are audited.
+    spoofed_dir = tmp_path / _NOMIC_CODERANKEEMBED_AUDITED_REVISION
+    spoofed_dir.mkdir()
+    with pytest.raises(ModelError, match="only permitted"):
+        _check_trust_remote_code_allowlist(str(spoofed_dir), None)
 
 
 def test_allowlist_rejects_local_path_with_wrong_dir_name(tmp_path: Path) -> None:

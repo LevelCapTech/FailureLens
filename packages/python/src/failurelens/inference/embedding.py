@@ -59,15 +59,11 @@ def _check_trust_remote_code_allowlist(model_id: str, revision: str | None) -> N
     """Raise :class:`ModelError` when *model_id*/*revision* is not in the allowlist.
 
     trust_remote_code=True executes arbitrary Python bundled with the model.
-    We only permit the single audited (model_id, revision) pair.  Local snapshot
-    paths are accepted when the leaf directory name equals the audited SHA.
+    We only permit the single audited (model_id, revision) pair; the model_id
+    must be an exact HuggingFace Hub repository ID, never a local path.
+    Local paths cannot be verified by name alone and are therefore rejected.
     """
-    # Exact HuggingFace Hub ID + pinned revision.
     if (model_id, revision) in _TRUST_REMOTE_CODE_ALLOWLIST:
-        return
-    # Local snapshot directory whose name is the audited revision SHA.
-    local = Path(model_id)
-    if local.is_dir() and local.name == _NOMIC_CODERANKEEMBED_AUDITED_REVISION:
         return
     raise ModelError(
         f"trust_remote_code=True is only permitted for the audited "
@@ -202,7 +198,7 @@ def load_sentence_transformer(
             revision=revision,
             device=device,
             trust_remote_code=trust_remote_code,
-            model_kwargs={"torch_dtype": "auto"},
+            model_kwargs={"torch_dtype": "auto", "use_safetensors": True},
         )
     except Exception as exc:  # pragma: no cover - requires network/model
         raise ModelError(f"Could not load embedding model {model_id!r}: {exc}") from exc

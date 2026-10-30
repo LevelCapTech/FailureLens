@@ -8,9 +8,11 @@
 
 ## Summary
 
-Production implementation of the `get_extended_attention_mask` compatibility shim for
-`nomic-ai/CodeRankEmbed` under `transformers>=5.x`, with security boundary enforcement,
-ML test gating, and a reproducible toy training path with checkpoint/resume.
+Stage 1 production implementation: `get_extended_attention_mask` compatibility shim for
+`nomic-ai/CodeRankEmbed` under `transformers>=5.x`, security boundary enforcement, and ML test
+gating. Also includes a reproducible toy training pipeline (ToyEncoder, not CodeRankEmbed)
+as infrastructure demonstration. Issue #19 checkpoint/resume requirement for actual
+CodeRankEmbed experiment is deferred to a future PR.
 
 ## Changes (this PR)
 
@@ -21,7 +23,7 @@ ML test gating, and a reproducible toy training path with checkpoint/resume.
 - `load_sentence_transformer`: accepts `trust_remote_code`; enforces allowlist; rejects `.bin` weights; auto-applies shim.
 - `_NOMIC_CODERANKEEMBED_AUDITED_REVISION`: pinned audited commit.
 - `_TRUST_REMOTE_CODE_ALLOWLIST`: frozen set of permitted `(model_id, revision)` pairs.
-- `_check_trust_remote_code_allowlist`: raises `ModelError` for any combination outside the allowlist (including local paths whose directory name is not the audited SHA).
+- `_check_trust_remote_code_allowlist`: raises `ModelError` for any combination outside the allowlist; local paths are always rejected (name alone cannot verify audited contents).
 
 ### `packages/python/pyproject.toml`
 
@@ -34,7 +36,7 @@ ML test gating, and a reproducible toy training path with checkpoint/resume.
 
 ### `packages/python/tests/test_embedding.py` (extended)
 
-- 12 new security tests: allowlist accepts exact pair and local snapshot path, rejects unpinned/wrong revision/unaudited repo/wrong local dir, `load_sentence_transformer` rejects untrusted models and `.bin` weights in local dir, allowlist constant correctness.
+- 12 new security tests: allowlist accepts exact pair; rejects unpinned/wrong revision/unaudited repo, local path with correct name (spoofed dir), local path with wrong dir name; `load_sentence_transformer` rejects untrusted models and `.bin` weights in local dir; allowlist constant correctness.
 
 ### `conftest.py` (root)
 
@@ -56,7 +58,7 @@ Reproducible toy training pipeline (CPU, pure-Python ToyEncoder, fixture data):
 | Check | Result |
 |-------|--------|
 | Model pin | `3c4b60807d71f79b43f3c4363786d9493691f8b1` (unchanged) |
-| trust_remote_code allowlist | `(model_id, revision)` pair OR local snapshot dir whose name = audited SHA; all other combinations raise `ModelError` |
+| trust_remote_code allowlist | Exact `(model_id, revision)` HF Hub pair only; local paths rejected (name alone cannot verify contents) |
 | safetensors-only (load path) | `.bin` files in local model dir raise `ModelError` before SentenceTransformer is called |
 | safetensors-only (cache) | Verified by integration test: `_MODEL_CACHE_ROOT.rglob("*.bin") == []` |
 | Non-nomic guard | `"NomicBert" in type(inner).__name__` |
@@ -136,7 +138,7 @@ python -m training.scripts.smoke_train \
     --output-dir /tmp/fl-toy-resume
 ```
 
-## CodeRankEmbed GPU Verification (aggregate metrics only — one-off, weights not retained)
+## CodeRankEmbed Shim Verification (one-off smoke, no checkpoint/resume — Stage 1 scope only)
 
 | Parameter | Value |
 |-----------|-------|
@@ -162,7 +164,8 @@ Caveats:
 - Val set is 2 records — not statistically meaningful.
 - Slight val increase is expected at 2-record val set.
 - `label_rationale` NOT used. Gate B NOT accessed. Weights NOT saved or released.
-- This run is verification-only (shim enables gradient flow). The reproducible training path is the toy pipeline above.
+- This run verifies the shim enables gradient flow (Stage 1 scope). Checkpoint/resume for
+  actual CodeRankEmbed is **not** in scope for this PR; it will be addressed in a follow-up.
 
 ## Appendix: Shim Math
 
