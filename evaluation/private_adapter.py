@@ -53,8 +53,9 @@ class Ranker(Protocol):
 
 @dataclass(frozen=True)
 class PrivateCase:
-    """The labels are held here, never in RankRequest or Candidate."""
+    """The labels and repository stratum stay here, never in a rank request."""
 
+    repository_id: str
     request: RankRequest
     positive_ids: frozenset[str]
     positive_file_ids: frozenset[str]
@@ -265,6 +266,7 @@ def _load_private_cases(
         request = RankRequest(query, candidates, top_k, _request_digest(query, candidates, top_k))
         cases.append(
             PrivateCase(
+                record["source_repository"],
                 request,
                 frozenset(candidate.id for candidate in positives),
                 frozenset(candidate.file_id for candidate in positives),
@@ -305,37 +307,39 @@ def load_private_cases(
         _reject("invalid private input")
 
 
-def compare_rankers(
-    case: PrivateCase, baseline: Ranker, model: Ranker
-) -> tuple[RankResult, RankResult]:
-    """Run both on the same immutable, unlabeled request; require complete permutations."""
+def run_ranker(case: PrivateCase, ranker: Ranker) -> RankResult:
+    """Validate a single ranker against the canonical unlabeled request."""
     request = case.request
     original = _request_digest(request.query, request.candidates, request.top_k)
     if original != request.digest:
         _reject("changed canonical request")
-    results = []
-    for ranker in (baseline, model):
-        try:
-            result = ranker(request)
-        except Exception:
-            _reject("ranker failed")
-        if _request_digest(request.query, request.candidates, request.top_k) != original:
-            _reject("changed canonical request")
-        if (
-            not isinstance(result, RankResult)
-            or result.request_digest != original
-            or type(result.top_k) is not int
-            or result.top_k != request.top_k
-        ):
-            _reject("ranker parity violation")
-        ordered = result.ordered_ids
-        expected = {candidate.id for candidate in request.candidates}
-        if (
-            not isinstance(ordered, tuple)
-            or any(not isinstance(item, str) for item in ordered)
-            or len(ordered) != len(expected)
-            or set(ordered) != expected
-        ):
-            _reject("ranker candidate mismatch")
-        results.append(result)
-    return results[0], results[1]
+    try:
+        result = ranker(request)
+    except Exception:
+        _reject("ranker failed")
+    if _request_digest(request.query, request.candidates, request.top_k) != original:
+        _reject("changed canonical request")
+    if (
+        not isinstance(result, RankResult)
+        or result.request_digest != original
+        or type(result.top_k) is not int
+        or result.top_k != request.top_k
+    ):
+        _reject("ranker parity violation")
+    ordered = result.ordered_ids
+    expected = {candidate.id for candidate in request.candidates}
+    if (
+        not isinstance(ordered, tuple)
+        or any(not isinstance(item, str) for item in ordered)
+        or len(ordered) != len(expected)
+        or set(ordered) != expected
+    ):
+        _reject("ranker candidate mismatch")
+    return result
+
+
+def compare_rankers(
+    case: PrivateCase, baseline: Ranker, model: Ranker
+) -> tuple[RankResult, RankResult]:
+    """Run both on the same immutable, unlabeled request; require complete permutations."""
+    return run_ranker(case, baseline), run_ranker(case, model)
