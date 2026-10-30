@@ -1,0 +1,19 @@
+{
+  "seed": 42,
+  "epochs": 3,
+  "batch_size": 2,
+  "learning_rate": 0.00002,
+  "weight_decay": 0.01,
+  "temperature": 0.07,
+  "max_length": 512,
+  "optimizer": "adamw",
+  "objective": "infonce",
+  "model_id": "nomic-ai/CodeRankEmbed",
+  "model_revision": "3c4b60807d71f79b43f3c4363786d9493691f8b1",
+  "dataset": "failurelens-train-issue17-v2",
+  "dataset_sha256": "74909f51b588c311de798bee29b748cfc1ead65fd2948053c8f3a1c729e465c1",
+  "split": "repo-level-6-6",
+  "train_repo": "pallets/click",
+  "val_repo": "python-attrs/attrs",
+  "trainable_layers": "last-encoder-layer"
+}
