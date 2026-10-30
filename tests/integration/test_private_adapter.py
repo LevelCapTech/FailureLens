@@ -291,3 +291,121 @@ def test_failing_source_digest_checks_bytes(tmp_path: Path) -> None:
     snapshot.write_bytes(snapshot.read_bytes() + b"# changed\n")
     with pytest.raises(PrivateInputError, match="failing snapshot digest mismatch"):
         _load((records_path, sources_path, train_path))
+
+
+def test_independent_runner_aggregate_and_na(tmp_path: Path) -> None:
+    from evaluation.independent_runner import MethodSpec, run_independent
+
+    _, *paths = _fixture(tmp_path, count=3, repos=3)
+    cases = _load(tuple(paths))
+
+    def reverse_factory(seed):
+        assert seed in (20261030, 20261031, 20261032)
+
+        def rank(request):
+            return RankResult(
+                tuple(c.id for c in reversed(request.candidates)), request.digest, request.top_k
+            )
+
+        return rank
+
+    report = run_independent(
+        cases,
+        reverse_factory,
+        model_spec=MethodSpec("fixture-ranker", "v1", 0, 0),
+        metadata=_synthetic_metadata(),
+    )
+    assert report["counts"] == {
+        "cases": 3,
+        "repositories": 3,
+        "function_labeled": 3,
+        "function_missing": 0,
+    }
+    assert [run["seed"] for run in report["runs"]] == [20261030, 20261031, 20261032]
+    assert report["summary"]["model"]["top1"]["median"] == 0.0
+    assert report["summary"]["model"]["mrr"]["median"] == 0.5
+    assert report["intervals"]["top1"]["model"] == [0.0, 0.0]
+    assert report["runs"][0]["metrics"]["model"]["latency_p95_s"] >= 0
+    assert report["runs"][0]["peak_rss_gib"] > 0
+    assert report["methods"]["model"]["parameter_count"] == 0
+    assert "private-case" not in json.dumps(report)
+    assert "mod.py" not in json.dumps(report)
+    assert "return 9" not in json.dumps(report)
+
+    absent = run_independent(cases, None)
+    assert absent["status"] == "model-not-run"
+    assert absent["summary"]["model"]["top1"] is None
+    assert absent["intervals"]["top1"] is None
+    assert absent["threshold_comparison"]["top1"] is None
+
+
+def test_independent_runner_missing_function_and_privacy(tmp_path: Path) -> None:
+    from evaluation.independent_runner import MethodSpec, paired_bootstrap, run_independent
+
+    _, *paths = _fixture(tmp_path, count=2, repos=2)
+    cases = _load(tuple(paths))
+    cases = (cases[0], replace(cases[1], positive_function_ids=None))
+    report = run_independent(cases, None)
+    assert report["counts"]["function_labeled"] == 1
+    assert report["counts"]["function_missing"] == 1
+    assert report["summary"]["baseline"]["top1"] is not None
+    assert report["summary"]["baseline"]["file_topk"] is not None
+    assert paired_bootstrap(["a", "a"], [1.0, 0.0], [0.0, 1.0])["delta"] == [-1.0, 1.0]
+    with pytest.raises(PrivateInputError, match="unsafe report metadata") as error:
+        run_independent(cases, None, metadata={"case_id": "private-case-0"})
+    assert "private-case-0" not in str(error.value)
+    with pytest.raises(PrivateInputError, match="unsafe method metadata") as error:
+        run_independent(cases, None, baseline_spec=MethodSpec("/private/source.py", "v1"))
+    assert "/private/source.py" not in str(error.value)
+
+
+def test_independent_runner_units_thresholds_and_ties(tmp_path: Path) -> None:
+    from evaluation.independent_runner import (
+        MethodSpec,
+        _percentile,
+        lexical_stack_baseline,
+        run_independent,
+    )
+
+    _, *paths = _fixture(tmp_path, count=1)
+    (case,) = _load(tuple(paths))
+    baseline = lexical_stack_baseline(case.request)
+    assert set(baseline.ordered_ids) == {c.id for c in case.request.candidates}
+    assert _percentile([1.0, 2.0, 3.0, 4.0], 0.95) == pytest.approx(3.85)
+
+    def same_factory(seed):
+        assert seed in (20261030, 20261031, 20261032)
+        return lexical_stack_baseline
+
+    report = run_independent(
+        (case,),
+        same_factory,
+        model_spec=MethodSpec("same", "v1", 1_000_000_001, 1024),
+        metadata=_synthetic_metadata(),
+    )
+    assert report["deltas"] == {"top1": 0.0, "mrr": 0.0}
+    assert report["threshold_comparison"]["top1_delta"] is False
+    assert report["threshold_comparison"]["mrr_delta"] is False
+    assert report["resource_comparison"]["parameters"] is False
+    assert report["methods"]["model"]["artifact_bytes"] == 1024
+    assert report["runs"][0]["model_load_s"] >= 0
+    with pytest.raises(PrivateInputError, match="missing model metadata"):
+        run_independent(
+            (case,),
+            same_factory,
+            model_spec=MethodSpec("same", "v1"),
+            metadata=_synthetic_metadata(),
+        )
+
+
+def _synthetic_metadata():
+    return {
+        "code_sha": "a" * 40,
+        "data_sha256": "b" * 64,
+        "source_manifest_sha256": "c" * 64,
+        "train_manifest_sha256": "d" * 64,
+        "model_sha256": "e" * 64,
+        "python_version": "3.12-test",
+        "hardware": "synthetic-cpu",
+        "command": "run_independent-api",
+    }
