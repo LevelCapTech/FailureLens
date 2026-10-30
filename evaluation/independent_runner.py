@@ -173,7 +173,10 @@ def _safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         "train_manifest_sha256",
         "model_sha256",
     }
+    blocked = ("private", "case", "label", "log", "source", "path", "record")
     for key, value in metadata.items():
+        if key not in digest_keys and any(word in str(value).lower() for word in blocked):
+            raise PrivateInputError("private evaluation rejected: unsafe report metadata")
         if key in digest_keys and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", str(value)):
             raise PrivateInputError("private evaluation rejected: unsafe report metadata")
         if key == "top_k" and (type(value) is not int or value < 1):
@@ -192,8 +195,11 @@ def _safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
 def _safe_spec(spec: MethodSpec) -> dict[str, Any]:
     import re
 
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", spec.name) or not re.fullmatch(
-        r"[A-Za-z0-9_.:-]{1,120}", spec.revision
+    blocked = ("private", "case", "label", "log", "source", "path", "record")
+    if (
+        not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", spec.name)
+        or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", spec.revision)
+        or any(word in spec.name.lower() or word in spec.revision.lower() for word in blocked)
     ):
         raise PrivateInputError("private evaluation rejected: unsafe method metadata")
     if spec.parameter_count is not None and spec.parameter_count < 0:

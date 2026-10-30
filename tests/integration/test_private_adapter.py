@@ -354,9 +354,13 @@ def test_independent_runner_missing_function_and_privacy(tmp_path: Path) -> None
     with pytest.raises(PrivateInputError, match="unsafe report metadata") as error:
         run_independent(cases, None, metadata={"case_id": "private-case-0"})
     assert "private-case-0" not in str(error.value)
+    with pytest.raises(PrivateInputError, match="unsafe report metadata"):
+        run_independent(cases, None, metadata={"hardware": "private-case-0"})
     with pytest.raises(PrivateInputError, match="unsafe method metadata") as error:
         run_independent(cases, None, baseline_spec=MethodSpec("/private/source.py", "v1"))
     assert "/private/source.py" not in str(error.value)
+    with pytest.raises(PrivateInputError, match="unsafe method metadata"):
+        run_independent(cases, None, baseline_spec=MethodSpec("private-case-0", "v1"))
 
 
 def test_independent_runner_units_thresholds_and_ties(tmp_path: Path) -> None:
