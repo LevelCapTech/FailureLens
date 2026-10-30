@@ -46,12 +46,12 @@ from failurelens.schemas import (
 # Exact audited commit for nomic-ai/CodeRankEmbed.
 # trust_remote_code=True is only safe at this pin; changing the revision
 # requires a fresh security audit.
-_NOMIC_CODERANKEEMBED_AUDITED_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
+_NOMIC_CODERANK_EMBED_AUDITED_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
 
 # Allowlist of (model_id, revision) pairs permitted to use trust_remote_code=True.
 # Expanding this list requires a separate security audit of the new revision's custom code.
 _TRUST_REMOTE_CODE_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
-    {("nomic-ai/CodeRankEmbed", _NOMIC_CODERANKEEMBED_AUDITED_REVISION)}
+    {("nomic-ai/CodeRankEmbed", _NOMIC_CODERANK_EMBED_AUDITED_REVISION)}
 )
 
 
@@ -151,6 +151,7 @@ def load_sentence_transformer(
     revision: str | None = None,
     device: str | None = None,
     trust_remote_code: bool = False,
+    cache_folder: str | None = None,
 ) -> EmbeddingEncoder:
     """Load a Sentence-Transformers model as an :class:`EmbeddingEncoder`.
 
@@ -198,6 +199,7 @@ def load_sentence_transformer(
             revision=revision,
             device=device,
             trust_remote_code=trust_remote_code,
+            cache_folder=cache_folder,
             model_kwargs={"torch_dtype": "auto", "use_safetensors": True},
         )
     except Exception as exc:  # pragma: no cover - requires network/model
@@ -377,7 +379,7 @@ class EmbeddingAnalyzer:
 
 
 __all__ = [
-    "_NOMIC_CODERANKEEMBED_AUDITED_REVISION",
+    "_NOMIC_CODERANK_EMBED_AUDITED_REVISION",
     "_TRUST_REMOTE_CODE_ALLOWLIST",
     "EmbeddingAnalyzer",
     "EmbeddingEncoder",

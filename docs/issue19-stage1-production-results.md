@@ -21,7 +21,7 @@ CodeRankEmbed experiment is deferred to a future PR.
 - `_nomic_bert_get_extended_attention_mask`: instance-level shim for the removed `ModelUtilsMixin.get_extended_attention_mask`, scoped to NomicBert only.
 - `_apply_nomic_bert_compat`: applies shim only when method is absent and `"NomicBert"` is in the type name.
 - `load_sentence_transformer`: accepts `trust_remote_code`; enforces allowlist; rejects `.bin` weights; auto-applies shim.
-- `_NOMIC_CODERANKEEMBED_AUDITED_REVISION`: pinned audited commit.
+- `_NOMIC_CODERANK_EMBED_AUDITED_REVISION`: pinned audited commit.
 - `_TRUST_REMOTE_CODE_ALLOWLIST`: frozen set of permitted `(model_id, revision)` pairs.
 - `_check_trust_remote_code_allowlist`: raises `ModelError` for any combination outside the allowlist; local paths are always rejected (name alone cannot verify audited contents).
 

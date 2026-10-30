@@ -34,22 +34,24 @@ def encoder(request):
         pytest.skip("ml extra not installed (torch missing)")
 
     from failurelens.inference.embedding import (
-        _NOMIC_CODERANKEEMBED_AUDITED_REVISION,
+        _NOMIC_CODERANK_EMBED_AUDITED_REVISION,
         load_sentence_transformer,
     )
 
-    assert _REVISION == _NOMIC_CODERANKEEMBED_AUDITED_REVISION, (
-        f"Test pin {_REVISION!r} != audited pin {_NOMIC_CODERANKEEMBED_AUDITED_REVISION!r}"
+    assert _REVISION == _NOMIC_CODERANK_EMBED_AUDITED_REVISION, (
+        f"Test pin {_REVISION!r} != audited pin {_NOMIC_CODERANK_EMBED_AUDITED_REVISION!r}"
     )
 
     if not _SNAPSHOT_PATH.exists():
         pytest.skip(f"Model snapshot not found at {_SNAPSHOT_PATH}")
 
-    # Load from local snapshot path to work offline without HF hub network calls.
+    # Load by Hub ID + revision with local cache_folder to avoid network calls.
     return load_sentence_transformer(
-        str(_SNAPSHOT_PATH),
+        "nomic-ai/CodeRankEmbed",
+        revision=_REVISION,
         trust_remote_code=True,
         device="cuda" if torch.cuda.is_available() else "cpu",
+        cache_folder=str(_MODEL_CACHE_ROOT),
     )
 
 

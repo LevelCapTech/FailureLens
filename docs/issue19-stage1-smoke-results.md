@@ -1,5 +1,7 @@
 # Issue #19 Stage 1 — CodeRankEmbed Smoke Test Results
 
+> **Note (added after resolution)**: The BLOCKER recorded in this log (`get_extended_attention_mask` missing in transformers 5.x) was resolved in the same PR by the project-local compatibility shim in `packages/python/src/failurelens/inference/embedding.py`. This document is a historical work-log of the original smoke-test session. See `docs/issue19-stage1-production-results.md` for the current production state.
+
 **Date**: 2026-10-30  
 **Node**: rtx5060ti (`fd91961048d37ea9b44ec661350933aad4928b402d3b4a1c8901c9e6e16df7ad`)  
 **Branch**: `feature/issue19-coderankeembed-smoke`  

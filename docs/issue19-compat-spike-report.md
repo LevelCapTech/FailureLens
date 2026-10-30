@@ -74,7 +74,7 @@ The guard `not hasattr(...)` ensures it is a no-op if a future transformers vers
 
 **Tested command**:
 ```
-VENV=/home/nishiyama/GitHub/FailureLens/.worktrees/failurelens-model-developer/.venv
+VENV=<path-to-ml-venv>  # set to the venv with ML extras installed
 cd /tmp && $VENV/bin/python -I /tmp/spike-issue19-compat/test_shim.py
 ```
 

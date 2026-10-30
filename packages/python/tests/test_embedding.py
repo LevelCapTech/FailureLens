@@ -16,7 +16,7 @@ from failurelens.config import DiagnoseConfig
 from failurelens.errors import MissingDependencyError, ModelError
 from failurelens.indexing.repository import build_index
 from failurelens.inference.embedding import (
-    _NOMIC_CODERANKEEMBED_AUDITED_REVISION,
+    _NOMIC_CODERANK_EMBED_AUDITED_REVISION,
     _TRUST_REMOTE_CODE_ALLOWLIST,
     EmbeddingAnalyzer,
     EmbeddingEncoder,
@@ -103,7 +103,7 @@ def test_from_pretrained_without_ml_extra_raises() -> None:
 
 def test_allowlist_accepts_exact_pair() -> None:
     _check_trust_remote_code_allowlist(
-        "nomic-ai/CodeRankEmbed", _NOMIC_CODERANKEEMBED_AUDITED_REVISION
+        "nomic-ai/CodeRankEmbed", _NOMIC_CODERANK_EMBED_AUDITED_REVISION
     )
 
 
@@ -120,7 +120,7 @@ def test_allowlist_rejects_wrong_revision() -> None:
 def test_allowlist_rejects_unaudited_repo() -> None:
     with pytest.raises(ModelError, match="only permitted"):
         _check_trust_remote_code_allowlist(
-            "some-other/Model", _NOMIC_CODERANKEEMBED_AUDITED_REVISION
+            "some-other/Model", _NOMIC_CODERANK_EMBED_AUDITED_REVISION
         )
 
 
@@ -132,7 +132,7 @@ def test_allowlist_rejects_unpinned_other_repo() -> None:
 def test_allowlist_rejects_local_path_with_correct_name(tmp_path: Path) -> None:
     # A directory whose name matches the audited SHA must still be rejected:
     # directory name alone cannot prove the contents are audited.
-    spoofed_dir = tmp_path / _NOMIC_CODERANKEEMBED_AUDITED_REVISION
+    spoofed_dir = tmp_path / _NOMIC_CODERANK_EMBED_AUDITED_REVISION
     spoofed_dir.mkdir()
     with pytest.raises(ModelError, match="only permitted"):
         _check_trust_remote_code_allowlist(str(spoofed_dir), None)
@@ -165,5 +165,5 @@ def test_load_rejects_bin_files_in_local_dir(tmp_path: Path) -> None:
 def test_allowlist_constant_contains_audited_pair() -> None:
     assert (
         "nomic-ai/CodeRankEmbed",
-        _NOMIC_CODERANKEEMBED_AUDITED_REVISION,
+        _NOMIC_CODERANK_EMBED_AUDITED_REVISION,
     ) in _TRUST_REMOTE_CODE_ALLOWLIST
