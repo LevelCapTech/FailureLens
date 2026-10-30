@@ -1,4 +1,4 @@
-"""Opt-in, local-only held-out input and candidate-parity boundary.
+"""Opt-in, local-only held-out failing-source and candidate-parity boundary.
 
 No private path or record content is included in raised errors. This module never
 runs a ranker or emits a report as a side effect of loading inputs.
@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
@@ -81,18 +80,33 @@ def _read_json(path: Path) -> Any:
         _reject("unreadable input")
 
 
-def _git_source(root: Path, commit: str, file: str) -> str:
-    # Git object reads give the exact pinned revision, regardless of worktree state.
+def _snapshot_source(snapshots: dict[str, Any], record_id: str, file: str) -> str:
+    case = snapshots.get(record_id)
+    item = case.get(file) if isinstance(case, dict) else None
+    if not isinstance(item, dict):
+        _reject("missing failing snapshot")
+    path, expected = item.get("path"), item.get("sha256")
+    if (
+        not isinstance(path, str)
+        or not Path(path).is_absolute()
+        or not isinstance(expected, str)
+        or len(expected) != 64
+        or any(c not in "0123456789abcdef" for c in expected)
+    ):
+        _reject("invalid failing snapshot pin")
     try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "show", f"{commit}:{file}"],
-            capture_output=True,
-            check=True,
-            timeout=15,
-        )
-        return result.stdout.decode("utf-8")
-    except (OSError, subprocess.SubprocessError, UnicodeError):
-        _reject("missing pinned source")
+        raw = Path(path).read_bytes()
+        source = raw.decode("utf-8")
+    except (OSError, UnicodeError):
+        _reject("unreadable failing snapshot")
+    if hashlib.sha256(raw).hexdigest() != expected:
+        _reject("failing snapshot digest mismatch")
+    return source
+
+
+def _query(error_log: str, stack_trace: str | None) -> str:
+    # JSON framing preserves both exact strings, including separators and newlines.
+    return _json_bytes({"error_log": error_log, "stack_trace": stack_trace}).decode("utf-8")
 
 
 def _location_id(location: dict[str, Any]) -> str:
@@ -103,13 +117,12 @@ def _location_id(location: dict[str, Any]) -> str:
     return f"{file}::{function or '<file>'}:{start or 0}-{end or 0}"
 
 
-def _candidate(record_candidate: dict[str, Any], root: Path, commit: str) -> Candidate:
+def _candidate(record_candidate: dict[str, Any], source: str) -> Candidate:
     location = record_candidate["location"]
     file = location["file"]
     pure = PurePosixPath(file)
     if not file or pure.is_absolute() or ".." in pure.parts or pure.suffix != ".py":
         _reject("invalid source location")
-    source = _git_source(root, commit, file)
     start = location.get("start_line")
     end = location.get("end_line")
     if (start is None) != (end is None) or (start is not None and (end < start)):
@@ -154,8 +167,7 @@ def _load_private_cases(
 ) -> tuple[PrivateCase, ...]:
     """Load runtime-only records and approved manifest; fail closed without data in errors.
 
-    Source manifest: {"repositories": {repo_id: {"path": local_git_path,
-    "commit": sha40, "rights_cleared": true}}}. Train manifest:
+    Source manifest pins repositories and per-record failing file snapshots. Train manifest:
     {"approval_id": nonempty_string, "training_repositories": [repo_id, ...]}.
     All four inputs are caller-supplied. No repository paths are embedded here.
     """
@@ -188,7 +200,11 @@ def _load_private_cases(
         _reject("quality violation")
     sources = _read_json(source_manifest_path)
     train = _read_json(train_manifest_path)
-    if not isinstance(sources, dict) or not isinstance(sources.get("repositories"), dict):
+    if (
+        not isinstance(sources, dict)
+        or not isinstance(sources.get("repositories"), dict)
+        or not isinstance(sources.get("snapshots"), dict)
+    ):
         _reject("invalid source manifest")
     if (
         not isinstance(train, dict)
@@ -217,15 +233,22 @@ def _load_private_cases(
             or any(c not in "0123456789abcdef" for c in commit)
         ):
             _reject("invalid source pin")
-        if not isinstance(entry.get("path"), str) or not entry["path"]:
-            _reject("missing source path")
     cases = []
     for record in records:
         entry = source_map[record["source_repository"]]
         if record["source_commit"] != entry["commit"]:
             _reject("source pin mismatch")
+        snapshot_map = sources["snapshots"]
+        candidate_files = {item["location"]["file"] for item in record["candidates"]}
+        case_snapshots = snapshot_map.get(record["record_id"])
+        if not isinstance(case_snapshots, dict) or set(case_snapshots) != candidate_files:
+            _reject("failing snapshot coverage mismatch")
+        files = {
+            file: _snapshot_source(snapshot_map, record["record_id"], file)
+            for file in candidate_files
+        }
         candidates = tuple(
-            _candidate(candidate, Path(entry["path"]), entry["commit"])
+            _candidate(candidate, files[candidate["location"]["file"]])
             for candidate in record["candidates"]
         )
         ids = [candidate.id for candidate in candidates]
@@ -238,7 +261,7 @@ def _load_private_cases(
         )
         if not positives:
             _reject("missing positive source location")
-        query = record["error_log"]
+        query = _query(record["error_log"], record.get("stack_trace"))
         request = RankRequest(query, candidates, top_k, _request_digest(query, candidates, top_k))
         cases.append(
             PrivateCase(

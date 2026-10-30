@@ -18,21 +18,43 @@ with redistribution screening enabled. **Any** rejected record rejects the
 whole set; there is no filtering. Production mode (the default) requires at
 least 30 cases and three distinct rights-cleared repositories.
 
-The source manifest is local JSON of this shape; `path` is a local Git clone
-containing the pinned commit, not a source-code export:
+The source manifest is evaluator-owned local JSON. It pins each repository and
+**every candidate file's failing-state snapshot for each record**. Each snapshot
+is an absolute path to UTF-8 source bytes and a lowercase SHA-256 of the entire
+file, not a clean `git show` export. The adapter refuses absent, extra, unreadable,
+or digest-mismatched snapshots. The location range is sliced from those verified
+failing bytes. The manifest and source files must remain private.
 
 ```json
-{"repositories":{"example/repo":{"path":"/local/git/clone","commit":"<40 lowercase hex>","rights_cleared":true}}}
+{
+  "repositories": {
+    "example/repo": {"commit": "<40 lowercase hex>", "rights_cleared": true}
+  },
+  "snapshots": {
+    "example-case": {
+      "module.py": {"path": "/private/failing-source.py", "sha256": "<64 lowercase hex>"}
+    }
+  }
+}
 ```
 
 Every record's `source_repository` must have a manifest entry and its
-`source_commit` must equal the pinned commit. Candidate source text comes from
-`git show <commit>:<relative-file>`, never from a potentially dirty worktree.
-A candidate with a function name requires a valid start/end line range. A
-missing/empty positive source location fails. Rights clearance is an evaluator-
-provided assertion, **not** inferred from SPDX or Git metadata; the evaluator
-must separately verify it against the approved rights ledger. The manifest
-must stay private because local paths may identify the evaluation environment.
+`source_commit` must equal the pinned commit. The evaluator must independently
+establish that the snapshot was captured or deterministically reconstructed from
+the failing state and that its digest belongs to the intended record. A file
+snapshot hash proves byte integrity after pinning; it does not itself prove the
+failure occurred. A candidate with a function name requires a valid start/end
+line range. A missing/empty positive source location fails. Rights clearance is
+an evaluator-provided assertion, **not** inferred from SPDX or Git metadata;
+the evaluator must separately verify it against the approved rights ledger.
+The source commit is provenance metadata, not the candidate's source revision.
+This library has no clean-source fallback and rejects old source manifests.
+
+`error_log` and optional `stack_trace` are JSON-framed into a single UTF-8
+`RankRequest.query` with separate named fields. Missing or null trace is
+represented as JSON `null`; an empty string remains empty. This preserves exact
+log/trace text without ambiguous separators. Both rankers receive the same
+request object and query bytes, bound into the request digest.
 
 The approved train manifest is local JSON:
 
@@ -52,7 +74,7 @@ those are upstream data-provenance obligations before Gate C.
 `load_private_cases` returns `PrivateCase` objects for the evaluator. Only
 `case.request` is passed to a ranker: a frozen `RankRequest(query, candidates,
 top_k, digest)`. Each candidate has a stable `file::function:start-end` ID,
-file/function IDs, pinned source text, and its SHA-256. Labels and rationale
+file/function IDs, pinned failing-state source text, and its SHA-256. Labels and rationale
 stay in `PrivateCase`, not in `RankRequest` or `Candidate`. A ranker returns
 `RankResult(ordered_ids, request_digest, top_k)`; `ordered_ids` must be a tuple
 containing **every** candidate exactly once. `compare_rankers` passes the *same*

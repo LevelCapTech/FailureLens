@@ -25,6 +25,7 @@ def _fixture(tmp_path: Path, *, count: int = 1, repos: int = 1, function: bool =
     tmp_path.mkdir(parents=True, exist_ok=True)
     records = []
     sources = {}
+    snapshots = {}
     for index in range(repos):
         root = tmp_path / f"source{index}"
         root.mkdir()
@@ -50,7 +51,6 @@ def _fixture(tmp_path: Path, *, count: int = 1, repos: int = 1, function: bool =
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
         ).strip()
         sources[f"synthetic/repo{index}"] = {
-            "path": str(root),
             "commit": commit,
             "rights_cleared": True,
         }
@@ -74,6 +74,7 @@ def _fixture(tmp_path: Path, *, count: int = 1, repos: int = 1, function: bool =
                 "pre_change_result": {"status": "passed"},
                 "post_change_result": {"status": "failed"},
                 "error_log": f"AssertionError: synthetic failure {index}",
+                "stack_trace": f"Traceback: synthetic frame {index}",
                 "candidates": [
                     {"location": first, "label": "positive"},
                     {"location": second, "label": "negative"},
@@ -83,11 +84,19 @@ def _fixture(tmp_path: Path, *, count: int = 1, repos: int = 1, function: bool =
                 "generator_version": "synthetic-v1",
             }
         )
+        snapshot = tmp_path / f"failing-{index}.py"
+        snapshot.write_text("def cause():\n    return 9\n\ndef decoy():\n    return 2\n")
+        snapshots[f"private-case-{index}"] = {
+            "mod.py": {
+                "path": str(snapshot),
+                "sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+            }
+        }
     records_path = tmp_path / "private-records.json"
     sources_path = tmp_path / "sources.json"
     train_path = tmp_path / "train.json"
     _write(records_path, records)
-    _write(sources_path, {"repositories": sources})
+    _write(sources_path, {"repositories": sources, "snapshots": snapshots})
     _write(
         train_path, {"approval_id": "fixture-only", "training_repositories": ["synthetic/train"]}
     )
@@ -123,6 +132,12 @@ def test_parity_and_no_label_to_rankers(tmp_path: Path) -> None:
     assert seen[0] is seen[1] is case.request
     assert baseline.ordered_ids != model.ordered_ids
     assert case.positive_function_ids == frozenset({"mod.py::cause"})
+    assert "return 9" in case.request.candidates[0].source_text
+    assert json.loads(case.request.query) == {
+        "error_log": "AssertionError: synthetic failure 0",
+        "stack_trace": "Traceback: synthetic frame 0",
+    }
+    assert case.request.query.encode() == seen[0].query.encode() == seen[1].query.encode()
 
 
 @pytest.mark.parametrize("change", ["missing", "extra", "duplicate", "digest", "top_k", "invalid"])
@@ -174,7 +189,19 @@ def test_production_accepts_synthetic_minimum(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "change", ["digest", "schema", "quality", "overlap", "id", "signature", "pin", "location"]
+    "change",
+    [
+        "digest",
+        "schema",
+        "quality",
+        "overlap",
+        "id",
+        "signature",
+        "pin",
+        "location",
+        "snapshot_digest",
+        "snapshot_missing",
+    ],
 )
 def test_fail_closed_without_private_values(tmp_path: Path, change: str) -> None:
     records, records_path, sources_path, train_path = _fixture(tmp_path, count=2)
@@ -191,8 +218,13 @@ def test_fail_closed_without_private_values(tmp_path: Path, change: str) -> None
         records[1]["record_id"] = records[0]["record_id"]
     if change == "signature":
         records[1]["error_log"] = records[0]["error_log"]
+        records[1]["stack_trace"] = records[0]["stack_trace"]
     if change == "pin":
         sources["repositories"]["synthetic/repo0"]["commit"] = "0" * 40
+    if change == "snapshot_digest":
+        sources["snapshots"]["private-case-0"]["mod.py"]["sha256"] = "0" * 64
+    if change == "snapshot_missing":
+        del sources["snapshots"]["private-case-0"]
     if change == "location":
         records[0]["candidates"][0]["location"]["start_line"] = 100
         records[0]["candidates"][0]["location"]["end_line"] = 101
@@ -242,3 +274,20 @@ def test_ranker_exception_is_redacted(tmp_path: Path) -> None:
         compare_rankers(case, leak, leak)
     assert "private-case" not in str(error.value)
     assert "positive" not in str(error.value)
+
+
+def test_missing_stack_trace_is_explicit_null(tmp_path: Path) -> None:
+    records, records_path, sources_path, train_path = _fixture(tmp_path)
+    del records[0]["stack_trace"]
+    _write(records_path, records)
+    (case,) = _load((records_path, sources_path, train_path))
+    assert json.loads(case.request.query)["stack_trace"] is None
+
+
+def test_failing_source_digest_checks_bytes(tmp_path: Path) -> None:
+    _, records_path, sources_path, train_path = _fixture(tmp_path)
+    sources = json.loads(sources_path.read_text())
+    snapshot = Path(sources["snapshots"]["private-case-0"]["mod.py"]["path"])
+    snapshot.write_bytes(snapshot.read_bytes() + b"# changed\n")
+    with pytest.raises(PrivateInputError, match="failing snapshot digest mismatch"):
+        _load((records_path, sources_path, train_path))
