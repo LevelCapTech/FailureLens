@@ -413,3 +413,19 @@ def _synthetic_metadata():
         "hardware": "synthetic-cpu",
         "command": "run_independent-api",
     }
+
+
+def test_function_span_mutation_shift_and_duplicate_names(tmp_path: Path) -> None:
+    from evaluation.private_adapter import _function_span
+
+    source = (
+        "def same():\n    return 1\n\n"
+        "def same():\n    raise ValueError()\n    return 2\n\n"
+        "def later():\n    return 3\n"
+    )
+    assert "raise ValueError()" in _function_span(source, "same", 4, 5)
+    assert _function_span(source, "later", 7, 8).startswith("def later():")
+    with pytest.raises(PrivateInputError):
+        _function_span(source, "same", 3, 4)
+    with pytest.raises(PrivateInputError):
+        _function_span(source, "later", 7, 9)
