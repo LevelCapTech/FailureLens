@@ -49,7 +49,10 @@ def parse_query(query: str) -> str:
         _reject("invalid query framing")
     log = framed["error_log"]
     normalized = training_query(log)
-    if normalized != log.strip():
+    if normalized != log.strip() or (
+        framed["stack_trace"] is not None
+        and _strip_generator_marker(framed["stack_trace"]) != framed["stack_trace"]
+    ):
         _reject("query sanitation mismatch")
     return normalized
 
@@ -128,6 +131,19 @@ class V3Ranker:
         return RankResult(ordered, request.digest, request.top_k)
 
 
+def _cache_has_unsafe_weights(cache_folder: str) -> bool:
+    # pathlib.rglob does not descend into symlinked directories on supported Python versions.
+    for root, dirs, files in os.walk(cache_folder, followlinks=False):
+        for name in dirs:
+            if (Path(root) / name).is_symlink():
+                return True
+        for name in files:
+            file = Path(root) / name
+            if file.suffix == ".bin" or (file.is_symlink() and file.resolve().suffix == ".bin"):
+                return True
+    return False
+
+
 def make_model_factory(
     artifact_path: Path, *, cache_folder: str | None = None, device: str = "cpu"
 ) -> Callable[[int], V3Ranker]:
@@ -138,7 +154,7 @@ def make_model_factory(
     if cache_folder is None:
         _reject("unavailable audited model cache")
     snapshot = Path(cache_folder) / "models--nomic-ai--CodeRankEmbed" / "snapshots" / MODEL_REVISION
-    if not snapshot.is_dir() or any(Path(cache_folder).rglob("*.bin")):
+    if not snapshot.is_dir() or _cache_has_unsafe_weights(cache_folder):
         _reject("unavailable audited model cache")
 
     def model_factory(seed: int) -> V3Ranker:

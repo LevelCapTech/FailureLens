@@ -22,6 +22,7 @@ def _request() -> RankRequest:
         {"error_log": "ValueError: synthetic failure", "stack_trace": "Traceback: ignored"},
         sort_keys=True,
         separators=(",", ":"),
+        ensure_ascii=False,
     )
     return RankRequest(
         query,
@@ -66,6 +67,40 @@ def test_query_training_feature_and_label_isolation() -> None:
 def test_query_fails_closed(query: str) -> None:
     with pytest.raises(PrivateInputError):
         parse_query(query)
+
+
+def test_non_ascii_canonical_query_and_stack_trace_sanitation() -> None:
+    query = json.dumps(
+        {"error_log": "ValueError: 合成エラー", "stack_trace": "トレース: 合成"},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    assert parse_query(query) == "ValueError: 合成エラー"
+    with pytest.raises(PrivateInputError, match="query sanitation mismatch"):
+        parse_query(
+            json.dumps(
+                {"error_log": "ValueError: synthetic", "stack_trace": "# issue17 injected fault"},
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+        )
+
+
+def test_symlinked_cache_directory_fails_closed(tmp_path) -> None:
+    from evaluation.v3_bridge import _cache_has_unsafe_weights
+
+    target = tmp_path / "outside"
+    target.mkdir()
+    (target / "pytorch_model.bin").write_bytes(b"unsafe placeholder")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "snapshot").symlink_to(target, target_is_directory=True)
+    assert _cache_has_unsafe_weights(str(cache))
+    (cache / "snapshot").unlink()
+    (cache / "model.safetensors").symlink_to(target / "pytorch_model.bin")
+    assert _cache_has_unsafe_weights(str(cache))
 
 
 def test_candidate_digest_fails_closed() -> None:

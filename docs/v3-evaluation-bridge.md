@@ -2,7 +2,7 @@
 
 `evaluation/v3_bridge.py` is evaluator-owned, import-safe code. It does not load
 private inputs, weights, or a model on import. The checkpoint must be supplied
-at runtime as `FAILURELENS_V3_ARTIFACT`; `FAILURELENS_V3_CACHE` is an optional
+at runtime as `FAILURELENS_V3_ARTIFACT`; `FAILURELENS_V3_CACHE` is a required
 local audited base-model cache; `FAILURELENS_V3_DEVICE` is `cpu` (default) or
 `cuda`. Use an isolated evaluator environment with the `ml` and `train` extras.
 Only the exact v3 safetensors artifact SHA-256 and the recorded Stage 2 train
