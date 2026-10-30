@@ -219,3 +219,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Model weights cache (large binaries, never commit)
+models/cache/
+*.safetensors
+*.bin
