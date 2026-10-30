@@ -27,6 +27,10 @@ simply *used* by the harness here. This keeps a single tested implementation and
 avoids a second import path. (The issue's initial layout suggested a standalone
 `evaluation/metrics/` package; this is the documented adjustment.)
 
+The opt-in private input and candidate-parity contract is documented in
+[`docs/private-evaluation-adapter.md`](../docs/private-evaluation-adapter.md). It
+does not run held-out evaluation or produce Gate C scores.
+
 ## Run it
 
 ```bash
