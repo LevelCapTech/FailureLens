@@ -40,9 +40,9 @@ files = ["packages/python/src/failurelens"]
 mypy_path = "packages/python/src"
 
 [[tool.mypy.overrides]]
-# The optional ML backend imports a third-party package that may be absent and
-# is untyped; do not fail type-checking of the core on its account.
-module = ["sentence_transformers.*"]
+# The optional ML backend imports third-party packages that may be absent in
+# non-ML environments; do not fail type-checking of the core on their account.
+module = ["sentence_transformers", "sentence_transformers.*", "torch", "torch.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
