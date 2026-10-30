@@ -31,7 +31,8 @@ from typing import Any
 
 _MODEL_ID = "nomic-ai/CodeRankEmbed"
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
-_DEFAULT_ARTIFACT_ROOT = Path.home() / ".local/share/failurelens/experiment-issue19-stage2"
+_EXPECTED_DATA_DIGEST = "74909f51b588c311de798bee29b748cfc1ead65fd2948053c8f3a1c729e465c1"
+_DEFAULT_ARTIFACT_ROOT = Path.home() / ".local/share/failurelens/experiment-issue19-stage2-v2"
 
 
 def _git_sha() -> str:
@@ -115,8 +116,9 @@ def _save_checkpoint(
     # Model weights: safetensors format
     save_file(model[0].model.state_dict(), ckpt_dir / "model.safetensors")
 
-    # Optimizer + scheduler + RNG state: our own training state file (not a
-    # downloaded model; weights_only=False is safe and expected here)
+    # Optimizer + scheduler + RNG state.  We use weights_only=True when
+    # loading, so we must confirm that all saved values are safe types
+    # (tensors, scalars, lists, dicts — no arbitrary Python objects).
     torch.save(
         {
             "optimizer": optimizer.state_dict(),
@@ -147,20 +149,78 @@ def _load_checkpoint(
     model: Any,
     optimizer: Any,
     scheduler: Any,
+    *,
+    expected_model_revision: str,
+    expected_data_digest: str,
+    expected_config: dict[str, Any],
 ) -> tuple[int, dict[str, list[float]]]:
+    """Load checkpoint and restore all training state.
+
+    Validates that the checkpoint's model revision, data digest, and
+    hyperparameter config match the current run before restoring any state,
+    to prevent silent cross-run contamination.
+
+    Raises RuntimeError if weights_only=True is incompatible with the saved
+    state types — this must be resolved before the run can be accepted; do NOT
+    fall back to weights_only=False.
+    """
     import torch
     from safetensors.torch import load_file
 
+    # --- validate metadata before loading any tensors ---
+    meta_path = ckpt_dir / "metadata.json"
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Checkpoint metadata missing: {meta_path}")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+
+    ckpt_run = meta.get("run_metadata", {})
+    ckpt_revision = ckpt_run.get("model_revision", "")
+    if ckpt_revision != expected_model_revision:
+        raise ValueError(
+            f"Checkpoint model_revision {ckpt_revision!r} != expected "
+            f"{expected_model_revision!r}. Refusing to resume from a different model."
+        )
+
+    ckpt_data_digest = ckpt_run.get("dataset_sha256", "")
+    if ckpt_data_digest != expected_data_digest:
+        raise ValueError(
+            f"Checkpoint dataset_sha256 {ckpt_data_digest!r} != expected "
+            f"{expected_data_digest!r}. Refusing to resume from a different dataset."
+        )
+
+    ckpt_config = meta.get("config", {})
+    mismatched = {
+        k: (ckpt_config.get(k), v) for k, v in expected_config.items() if ckpt_config.get(k) != v
+    }
+    if mismatched:
+        raise ValueError(
+            f"Checkpoint config mismatch on keys {list(mismatched)}: "
+            f"{mismatched}. Refusing to resume from a different experiment."
+        )
+
+    # --- load model weights (safetensors; no pickle) ---
     state_dict = load_file(ckpt_dir / "model.safetensors")
     model[0].model.load_state_dict(state_dict)
 
-    # Load our own training state (weights_only=False is intentional: this is
-    # our own file containing optimizer state, not a downloaded model)
-    ts = torch.load(
-        ckpt_dir / "training_state.pt",
-        weights_only=False,
-        map_location="cpu",
-    )
+    # --- load optimizer/scheduler/RNG state with weights_only=True ---
+    # weights_only=True is safe for dicts of tensors and Python scalars.
+    # If this raises a TypeError due to incompatible saved types, the run
+    # cannot proceed; do NOT fall back to weights_only=False.
+    try:
+        ts = torch.load(
+            ckpt_dir / "training_state.pt",
+            weights_only=True,
+            map_location="cpu",
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"torch.load with weights_only=True failed on "
+            f"{ckpt_dir / 'training_state.pt'}: {exc}\n"
+            "Checkpoint contains types incompatible with weights_only=True. "
+            "Falling back to weights_only=False is not permitted; resolve the "
+            "type compatibility issue before proceeding."
+        ) from exc
+
     optimizer.load_state_dict(ts["optimizer"])
     scheduler.load_state_dict(ts["scheduler"])
     if ts.get("torch_rng") is not None:
@@ -168,7 +228,6 @@ def _load_checkpoint(
     if ts.get("cuda_rng") is not None and torch.cuda.is_available():
         torch.cuda.set_rng_state(ts["cuda_rng"])
 
-    meta = json.loads((ckpt_dir / "metadata.json").read_text(encoding="utf-8"))
     return meta["epoch"], meta["history"]
 
 
@@ -189,8 +248,10 @@ def run_stage2_finetune(
         train_examples: Stage2Example list from load_stage2_examples()[0].
         val_examples: Stage2Example list from load_stage2_examples()[1].
         output_dir: Where to write checkpoints and artifact (default: private
-            ~/.local/share path).
+            ~/.local/share path versioned as stage2-v2).
         resume_from: Checkpoint dir to resume from (e.g. checkpoint_epoch_2/).
+            The checkpoint must match the current model revision, data digest,
+            and config; mismatches raise ValueError.
         model_cache_dir: Local model cache folder (must contain audited snapshot).
 
     Returns:
@@ -243,13 +304,21 @@ def run_stage2_finetune(
     if resume_from is not None:
         if not resume_from.exists():
             raise FileNotFoundError(f"Resume checkpoint not found: {resume_from}")
-        start_epoch, history = _load_checkpoint(resume_from, model, optimizer, scheduler)
+        start_epoch, history = _load_checkpoint(
+            resume_from,
+            model,
+            optimizer,
+            scheduler,
+            expected_model_revision=_REVISION,
+            expected_data_digest=_EXPECTED_DATA_DIGEST,
+            expected_config=config,
+        )
 
     run_metadata: dict[str, Any] = {
         "git_sha": _git_sha(),
         "model_id": _MODEL_ID,
         "model_revision": _REVISION,
-        "dataset_sha256": "74909f51b588c311de798bee29b748cfc1ead65fd2948053c8f3a1c729e465c1",
+        "dataset_sha256": _EXPECTED_DATA_DIGEST,
         "n_train": len(train_examples),
         "n_val": len(val_examples),
         "trainable_params": trainable,

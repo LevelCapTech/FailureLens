@@ -5,12 +5,15 @@ Skip unless ``--run-ml-integration`` is passed.
 
 Verifies:
 1. load_stage2_examples() reconstructs 12 examples (6 train, 6 val).
-2. Positive texts contain the injected mutation comment (proves mutated state).
-3. Positive != negative texts (not clean-only source).
-4. Full run produces monotonically decreasing or stable train loss.
-5. Checkpoint/resume: epoch 3 loss from resumed run matches full run within 1e-5.
-6. Final artifact is safetensors and has a valid SHA256 digest.
-7. No .bin files in the model cache (safetensors-only loader).
+2. No generator marker (``# issue17 injected fault``) appears in positive,
+   query, or negative texts for ALL 12 examples (fail-closed).
+3. Positive texts are byte-identical to an independent second reconstruction
+   from the same private source files (digest proof).
+4. Positive != negative texts (not clean-only source).
+5. Full run produces monotonically decreasing or stable train loss.
+6. Checkpoint/resume: epoch 3 loss from resumed run matches full run within 1e-5.
+7. Final artifact is safetensors and has a valid SHA256 digest.
+8. No .bin files in the model cache (safetensors-only loader).
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ _STAGE1_MODEL_CACHE = (
 )
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
 _SNAPSHOT_PATH = _STAGE1_MODEL_CACHE / "models--nomic-ai--CodeRankEmbed" / "snapshots" / _REVISION
+_GENERATOR_MARKER = "# issue17 injected fault"
 
 
 def _require_ml_integration(request: pytest.FixtureRequest) -> None:
@@ -123,11 +127,34 @@ class TestStage2DataReconstruction:
         assert all(ex.source_repository == "pallets/click" for ex in train)
         assert all(ex.source_repository == "python-attrs/attrs" for ex in val)
 
-    def test_positive_contains_mutation_marker(self, stage2_examples) -> None:
+    def test_no_generator_marker_in_positive(self, stage2_examples) -> None:
+        """Fail-closed: generator marker must be ABSENT from all 12 positive texts."""
         train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
         for ex in train + val:
-            assert "issue17 injected fault" in ex.positive, (
-                f"Mutated code marker missing in positive for {ex.record_id!r}"
+            assert _GENERATOR_MARKER not in ex.positive, (
+                f"Generator marker found in positive text for {ex.record_id!r}: "
+                f"feature contains label signal"
+            )
+
+    def test_no_generator_marker_in_query(self, stage2_examples) -> None:
+        """Fail-closed: generator marker must be ABSENT from all 12 query texts."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            assert _GENERATOR_MARKER not in ex.query, (
+                f"Generator marker found in query (error_log) for {ex.record_id!r}: "
+                f"feature contains label signal"
+            )
+
+    def test_no_generator_marker_in_negative(self, stage2_examples) -> None:
+        """Fail-closed: generator marker must be ABSENT from all 12 negative texts."""
+        train, val = stage2_examples
+        assert len(train) == 6 and len(val) == 6, "Expected exactly 12 total examples"
+        for ex in train + val:
+            assert _GENERATOR_MARKER not in ex.negative, (
+                f"Generator marker found in negative text for {ex.record_id!r}: "
+                f"feature contains label signal"
             )
 
     def test_positive_differs_from_negative(self, stage2_examples) -> None:
@@ -135,6 +162,58 @@ class TestStage2DataReconstruction:
         for ex in train + val:
             assert ex.positive != ex.negative, (
                 f"Positive == negative for {ex.record_id!r} (clean-only source?)"
+            )
+
+    def test_positive_reconstruction_digest(self, stage2_examples) -> None:
+        """Positive texts must byte-match an independent second reconstruction.
+
+        Re-derives each positive text from scratch using the private source files
+        and the same reconstruction logic, then compares SHA-256 digests.  This
+        proves that load_stage2_examples() faithfully reconstructs the mutated
+        source without extra transformation.
+        """
+        import hashlib
+        import json as _json
+
+        train, val = stage2_examples
+        records = _json.loads((_PRIVATE_DATA_ROOT / "records.json").read_text())
+
+        from training.data_stage2 import (
+            _REPO_SOURCE_KEYS,
+            _extract_mutated_function_text,
+            _reconstruct_injection_statement,
+            _strip_generator_marker,
+        )
+
+        by_id = {ex.record_id: ex for ex in train + val}
+        for rec in records:
+            ex = by_id.get(rec["record_id"])
+            if ex is None:
+                continue
+
+            repo_key = _REPO_SOURCE_KEYS[rec["source_repository"]]
+            source_dir = _PRIVATE_DATA_ROOT / "sources" / repo_key
+            il = rec["injection_location"]
+            injection_stmt = _reconstruct_injection_statement(rec)
+            pos_file = source_dir / il["file"]
+
+            expected_positive = _strip_generator_marker(
+                _extract_mutated_function_text(
+                    pos_file,
+                    il["function"],
+                    injection_stmt,
+                    il["start_line"],
+                    il["end_line"],
+                )
+            )
+
+            expected_digest = hashlib.sha256(expected_positive.encode()).hexdigest()
+            actual_digest = hashlib.sha256(ex.positive.encode()).hexdigest()
+
+            assert expected_digest == actual_digest, (
+                f"Positive reconstruction digest mismatch for {ex.record_id!r}: "
+                f"expected {expected_digest} got {actual_digest}. "
+                f"load_stage2_examples() diverges from independent reconstruction."
             )
 
     def test_query_is_nonempty_traceback(self, stage2_examples) -> None:

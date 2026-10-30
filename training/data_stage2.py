@@ -17,6 +17,10 @@ Reconstruction method (aggregate, no individual labels here):
   numbers are authoritative and the full function body is included.
 - The isolated copy is a tmpdir; the original source file is never modified.
 
+Generator marker ``# issue17 injected fault`` is STRIPPED from all three
+features (query, positive, negative) before they are returned.  No
+model-visible text carries this label signal.
+
 Constraints honoured:
 - ``label_rationale``, ground-truth markers, and invented identifiers are NOT
   used as features.  Only ``injection_method``, ``error_log``, and the source
@@ -24,7 +28,7 @@ Constraints honoured:
 - ``psf/requests``, ``pallets/werkzeug``, ``pypa/pip`` are excluded.
 - Data digest is verified before loading.
 
-Split policy: repo-level 6 train / 6 val — all ``pallets/click`` records are
+Split policy: repo-level 6 train / 6 val --- all ``pallets/click`` records are
 assigned to training, all ``python-attrs/attrs`` records to validation.
 This avoids within-repository leakage between the train and val sets.
 """
@@ -53,6 +57,11 @@ _REPO_SOURCE_KEYS: dict[str, str] = {
 _TRAIN_REPO: str = "pallets/click"
 _VAL_REPO: str = "python-attrs/attrs"
 
+# Marker appended by the private dataset generator to injected lines and
+# preserved verbatim in error_log tracebacks.  It must NOT appear in any
+# training feature passed to the model.
+_GENERATOR_MARKER: str = "# issue17 injected fault"
+
 
 @dataclass(frozen=True)
 class Stage2Example:
@@ -69,9 +78,29 @@ def _verify_data_digest(records_path: Path) -> None:
     digest = hashlib.sha256(records_path.read_bytes()).hexdigest()
     if digest != EXPECTED_DATASET_SHA256:
         raise ValueError(
-            f"Dataset digest mismatch — expected {EXPECTED_DATASET_SHA256!r} "
+            f"Dataset digest mismatch --- expected {EXPECTED_DATASET_SHA256!r} "
             f"but got {digest!r}. Use the authorised private dataset only."
         )
+
+
+def _strip_generator_marker(text: str) -> str:
+    """Remove the private generator marker from every line in *text*.
+
+    The marker ``# issue17 injected fault`` appears as an inline comment
+    appended to injected source lines and is echoed verbatim in error_log
+    tracebacks.  Stripping it ensures that no model-visible feature contains
+    generator-specific label information.
+    """
+    lines = text.splitlines(keepends=True)
+    result: list[str] = []
+    for line in lines:
+        newline = "\n" if line.endswith("\n") else ""
+        content = line.rstrip("\n")
+        if _GENERATOR_MARKER in content:
+            idx = content.index(_GENERATOR_MARKER)
+            content = content[:idx].rstrip()
+        result.append(content + newline)
+    return "".join(result)
 
 
 def _reconstruct_injection_statement(record: dict[str, Any]) -> str:
@@ -91,8 +120,8 @@ def _reconstruct_injection_statement(record: dict[str, Any]) -> str:
     if method == "raised exception":
         for raw_line in record["error_log"].splitlines():
             stripped = raw_line.strip()
-            if "# issue17 injected fault" in stripped and stripped.startswith("raise"):
-                return stripped.replace("  # issue17 injected fault", "").strip()
+            if _GENERATOR_MARKER in stripped and stripped.startswith("raise"):
+                return _strip_generator_marker(stripped).strip()
         raise ValueError(
             f"Cannot reconstruct raise statement from error_log "
             f"for record {record.get('record_id')!r}"
@@ -119,6 +148,9 @@ def _extract_mutated_function_text(
     Works on an isolated copy in a tmpdir so the original is never modified.
     After insertion the function spans [start_line, end_line + 1] (1-indexed
     inclusive), because one line is prepended inside the body.
+
+    The generator marker is NOT appended to the injected line --- callers
+    must pass the clean injection statement without any label comment.
     """
     with tempfile.TemporaryDirectory(prefix="fl_stage2_iso_") as tmp:
         isolated = Path(tmp) / source_file.name
@@ -133,7 +165,7 @@ def _extract_mutated_function_text(
         lines = text.splitlines(keepends=True)
         mutated = [
             *lines[:insert_at],
-            indent + injection_statement + "  # issue17 injected fault\n",
+            indent + injection_statement + "\n",
             *lines[insert_at:],
         ]
         # def line stays at start_line; end shifts +1 after insertion
@@ -158,6 +190,9 @@ def load_stage2_examples(
 
     Returns ``(train_examples, val_examples)`` using a repo-level 6/6 split:
     ``pallets/click`` -> train, ``python-attrs/attrs`` -> val.
+
+    Generator markers are stripped from all features before the examples are
+    returned; no ``# issue17 injected fault`` annotation reaches the model.
     """
     root = data_root if data_root is not None else PRIVATE_DATA_ROOT
     records_path = root / "records.json"
@@ -198,25 +233,29 @@ def load_stage2_examples(
 
         injection_stmt = _reconstruct_injection_statement(rec)
         pos_file = source_dir / il["file"]
-        positive_text = _extract_mutated_function_text(
-            pos_file,
-            il["function"],
-            injection_stmt,
-            il["start_line"],
-            il["end_line"],
+        positive_text = _strip_generator_marker(
+            _extract_mutated_function_text(
+                pos_file,
+                il["function"],
+                injection_stmt,
+                il["start_line"],
+                il["end_line"],
+            )
         )
 
         neg_loc: dict[str, Any] = negative_cand["location"]
         neg_file = source_dir / neg_loc["file"]
-        negative_text = _extract_clean_function_text(
-            neg_file,
-            neg_loc["start_line"],
-            neg_loc["end_line"],
+        negative_text = _strip_generator_marker(
+            _extract_clean_function_text(
+                neg_file,
+                neg_loc["start_line"],
+                neg_loc["end_line"],
+            )
         )
 
         example = Stage2Example(
             record_id=rec["record_id"],
-            query=rec["error_log"].strip(),
+            query=_strip_generator_marker(rec["error_log"].strip()),
             positive=positive_text,
             negative=negative_text,
             source_repository=repo,
