@@ -7,11 +7,22 @@ model; FailureLens does not yet ship its own fine-tuned weights.
 
 The reranking math is isolated from the model loading so it can be unit-tested
 with a stub encoder (no heavy dependencies, no downloads).
+
+Compat note
+-----------
+``transformers>=5.0`` removed ``ModelUtilsMixin.get_extended_attention_mask``.
+The nomic-ai/CodeRankEmbed custom modelling code at revision
+``3c4b60807d71f79b43f3c4363786d9493691f8b1`` calls that method.  The
+:func:`_apply_nomic_bert_compat` adapter patches the method back onto the loaded
+instance at construction time so that no downgrade or fork is required.  The
+patch is strictly scoped: it is only applied when the inner model is missing the
+method AND is identified as a NomicBert variant, never globally.
 """
 
 from __future__ import annotations
 
 import math
+import types
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -32,6 +43,11 @@ from failurelens.schemas import (
     ScoreType,
 )
 
+# Exact audited commit for nomic-ai/CodeRankEmbed.
+# trust_remote_code=True is only safe at this pin; changing the revision
+# requires a fresh security audit.
+_NOMIC_CODERANKEEMBED_AUDITED_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
+
 
 @runtime_checkable
 class EmbeddingEncoder(Protocol):
@@ -42,12 +58,92 @@ class EmbeddingEncoder(Protocol):
         ...
 
 
+def _nomic_bert_get_extended_attention_mask(
+    self: object,
+    attention_mask: object,
+    input_shape: object,
+    device: object = None,
+    dtype: object = None,
+) -> object:
+    """Replaces ``transformers`` 4.x ``get_extended_attention_mask`` for NomicBert.
+
+    Converts a 2-D ``(B, S)`` binary mask into the 4-D ``(B, 1, 1, S)`` additive
+    float mask expected by the NomicBert attention computation.  Values of 1
+    (attended) become 0.0 and values of 0 (padding) become ``-inf`` (represented
+    as ``torch.finfo(float32).min`` for numerical stability).
+
+    A 4-D mask is passed through unchanged.  Any other dimensionality raises
+    ``ValueError`` so errors surface early instead of producing silent NaN output.
+    """
+    import torch  # noqa: PLC0415 — ML extra required at call site
+
+    if attention_mask is None:
+        return None
+    if attention_mask.dim() == 2:  # type: ignore[union-attr]
+        extended = attention_mask[:, None, None, :]  # type: ignore[index]
+        extended = extended.to(dtype=torch.float32)
+        extended = (1.0 - extended) * torch.finfo(torch.float32).min
+        return extended
+    if attention_mask.dim() == 4:  # type: ignore[union-attr]
+        return attention_mask
+    raise ValueError(
+        f"Unexpected attention_mask dim {attention_mask.dim()}; expected 2 or 4."  # type: ignore[union-attr]
+    )
+
+
+def _apply_nomic_bert_compat(model: object) -> None:
+    """Apply the ``get_extended_attention_mask`` shim to *model* if needed.
+
+    Guards:
+    * Only applied when the method is absent (no-op on future transformers versions
+      that restore it, or models that already provide it).
+    * Only applied when the inner model type name contains ``NomicBert`` — the shim
+      is specific to NomicBert's attention math and must not be injected into
+      unrelated models.
+
+    ``model`` is expected to be a ``SentenceTransformer`` instance; ``model[0]``
+    is the first transformer module and ``model[0].auto_model`` is the underlying
+    HuggingFace model.
+    """
+    try:
+        inner = model[0].auto_model  # type: ignore[index]
+    except (TypeError, KeyError, AttributeError):
+        return
+
+    if hasattr(inner, "get_extended_attention_mask"):
+        return  # already present; nothing to do
+
+    inner_type = type(inner).__name__
+    if "NomicBert" not in inner_type:
+        return  # non-nomic guard: do not patch unrelated models
+
+    inner.get_extended_attention_mask = types.MethodType(  # type: ignore[attr-defined]
+        _nomic_bert_get_extended_attention_mask, inner
+    )
+
+
 def load_sentence_transformer(
-    model_id: str, *, revision: str | None = None, device: str | None = None
-) -> EmbeddingEncoder:
+    model_id: str,
+    *,
+    revision: str | None = None,
+    device: str | None = None,
+    trust_remote_code: bool = False,
+) -> "EmbeddingEncoder":
     """Load a Sentence-Transformers model as an :class:`EmbeddingEncoder`.
 
+    For ``nomic-ai/CodeRankEmbed`` pass the exact audited revision and set
+    ``trust_remote_code=True``; the caller is responsible for pinning::
+
+        load_sentence_transformer(
+            "nomic-ai/CodeRankEmbed",
+            revision="3c4b60807d71f79b43f3c4363786d9493691f8b1",
+            trust_remote_code=True,
+        )
+
+    The NomicBert compat shim is applied automatically when needed.
+
     Raises :class:`MissingDependencyError` if the ``ml`` extra is not installed.
+    Raises :class:`ModelError` on load failure.
     """
     try:
         from sentence_transformers import SentenceTransformer
@@ -59,9 +155,17 @@ def load_sentence_transformer(
         ) from exc
 
     try:
-        model = SentenceTransformer(model_id, revision=revision, device=device)
+        model = SentenceTransformer(
+            model_id,
+            revision=revision,
+            device=device,
+            trust_remote_code=trust_remote_code,
+            model_kwargs={"torch_dtype": "auto"},
+        )
     except Exception as exc:  # pragma: no cover - requires network/model
         raise ModelError(f"Could not load embedding model {model_id!r}: {exc}") from exc
+
+    _apply_nomic_bert_compat(model)
 
     return _SentenceTransformerEncoder(model)
 
@@ -238,4 +342,5 @@ __all__ = [
     "EmbeddingAnalyzer",
     "EmbeddingEncoder",
     "load_sentence_transformer",
+    "_NOMIC_CODERANKEEMBED_AUDITED_REVISION",
 ]
