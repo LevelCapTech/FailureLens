@@ -7,10 +7,10 @@ requiring network access.
 
 from __future__ import annotations
 
-import math
-import types
-
 import pytest
+
+# Skip the entire module when torch is not installed (ML extra absent).
+torch = pytest.importorskip("torch")
 
 # ---------------------------------------------------------------------------
 # Shim import helpers
@@ -22,6 +22,7 @@ def _import_shim():
         _apply_nomic_bert_compat,
         _nomic_bert_get_extended_attention_mask,
     )
+
     return _apply_nomic_bert_compat, _nomic_bert_get_extended_attention_mask
 
 
@@ -75,7 +76,6 @@ class TestShimMath:
     """Verify the attention mask transformation mathematics."""
 
     def _call_shim(self, mask):
-        import torch
 
         _, shim = _import_shim()
         fake_self = object.__new__(object)
@@ -210,7 +210,9 @@ class TestApplyNomicBertCompat:
         inner = _make_fake_other_model()
         st = _make_fake_st(inner)
         apply(st)
-        assert not hasattr(inner, "get_extended_attention_mask"), "Non-nomic model must not be patched"
+        assert not hasattr(inner, "get_extended_attention_mask"), (
+            "Non-nomic model must not be patched"
+        )
 
     def test_bad_st_structure_does_not_raise(self):
         """Gracefully handles models where model[0].auto_model is absent."""

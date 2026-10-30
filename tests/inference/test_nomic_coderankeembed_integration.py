@@ -10,7 +10,6 @@ Run locally:
 
 from __future__ import annotations
 
-import os
 import pathlib
 
 import pytest
@@ -18,12 +17,7 @@ import pytest
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent
 _MODEL_CACHE_ROOT = _REPO_ROOT / "models" / "cache" / "nomic-coderankeembed-smoke"
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
-_SNAPSHOT_PATH = (
-    _MODEL_CACHE_ROOT
-    / "models--nomic-ai--CodeRankEmbed"
-    / "snapshots"
-    / _REVISION
-)
+_SNAPSHOT_PATH = _MODEL_CACHE_ROOT / "models--nomic-ai--CodeRankEmbed" / "snapshots" / _REVISION
 
 
 def _skip_unless_ml_integration(request):
@@ -87,7 +81,9 @@ class TestCodeRankEmbedSmoke:
         vecs = encoder.encode(SYNTHETIC_STRINGS)
         arr = np.array(vecs)
         norms = np.linalg.norm(arr, axis=1)
-        np.testing.assert_allclose(norms, 1.0, atol=1e-5, err_msg="Embeddings are not L2-normalized")
+        np.testing.assert_allclose(
+            norms, 1.0, atol=1e-5, err_msg="Embeddings are not L2-normalized"
+        )
 
     def test_padding_invariance(self, encoder):
         """Single-item encode and batch encode must agree within tolerance."""

@@ -48,6 +48,33 @@ from failurelens.schemas import (
 # requires a fresh security audit.
 _NOMIC_CODERANKEEMBED_AUDITED_REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
 
+# Allowlist of (model_id, revision) pairs permitted to use trust_remote_code=True.
+# Expanding this list requires a separate security audit of the new revision's custom code.
+_TRUST_REMOTE_CODE_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
+    {("nomic-ai/CodeRankEmbed", _NOMIC_CODERANKEEMBED_AUDITED_REVISION)}
+)
+
+
+def _check_trust_remote_code_allowlist(model_id: str, revision: str | None) -> None:
+    """Raise :class:`ModelError` when *model_id*/*revision* is not in the allowlist.
+
+    trust_remote_code=True executes arbitrary Python bundled with the model.
+    We only permit the single audited (model_id, revision) pair.  Local snapshot
+    paths are accepted when the leaf directory name equals the audited SHA.
+    """
+    # Exact HuggingFace Hub ID + pinned revision.
+    if (model_id, revision) in _TRUST_REMOTE_CODE_ALLOWLIST:
+        return
+    # Local snapshot directory whose name is the audited revision SHA.
+    local = Path(model_id)
+    if local.is_dir() and local.name == _NOMIC_CODERANKEEMBED_AUDITED_REVISION:
+        return
+    raise ModelError(
+        f"trust_remote_code=True is only permitted for the audited "
+        f"(model_id, revision) pair.  Allowlist: {sorted(_TRUST_REMOTE_CODE_ALLOWLIST)}.  "
+        f"Got model_id={model_id!r}, revision={revision!r}."
+    )
+
 
 @runtime_checkable
 class EmbeddingEncoder(Protocol):
@@ -75,19 +102,19 @@ def _nomic_bert_get_extended_attention_mask(
     A 4-D mask is passed through unchanged.  Any other dimensionality raises
     ``ValueError`` so errors surface early instead of producing silent NaN output.
     """
-    import torch  # noqa: PLC0415 — ML extra required at call site
+    import torch
 
     if attention_mask is None:
         return None
-    if attention_mask.dim() == 2:  # type: ignore[union-attr]
+    if attention_mask.dim() == 2:  # type: ignore[attr-defined]
         extended = attention_mask[:, None, None, :]  # type: ignore[index]
         extended = extended.to(dtype=torch.float32)
         extended = (1.0 - extended) * torch.finfo(torch.float32).min
         return extended
-    if attention_mask.dim() == 4:  # type: ignore[union-attr]
+    if attention_mask.dim() == 4:  # type: ignore[attr-defined]
         return attention_mask
     raise ValueError(
-        f"Unexpected attention_mask dim {attention_mask.dim()}; expected 2 or 4."  # type: ignore[union-attr]
+        f"Unexpected attention_mask dim {attention_mask.dim()}; expected 2 or 4."  # type: ignore[attr-defined]
     )
 
 
@@ -117,7 +144,7 @@ def _apply_nomic_bert_compat(model: object) -> None:
     if "NomicBert" not in inner_type:
         return  # non-nomic guard: do not patch unrelated models
 
-    inner.get_extended_attention_mask = types.MethodType(  # type: ignore[attr-defined]
+    inner.get_extended_attention_mask = types.MethodType(
         _nomic_bert_get_extended_attention_mask, inner
     )
 
@@ -128,7 +155,7 @@ def load_sentence_transformer(
     revision: str | None = None,
     device: str | None = None,
     trust_remote_code: bool = False,
-) -> "EmbeddingEncoder":
+) -> EmbeddingEncoder:
     """Load a Sentence-Transformers model as an :class:`EmbeddingEncoder`.
 
     For ``nomic-ai/CodeRankEmbed`` pass the exact audited revision and set
@@ -145,6 +172,21 @@ def load_sentence_transformer(
     Raises :class:`MissingDependencyError` if the ``ml`` extra is not installed.
     Raises :class:`ModelError` on load failure.
     """
+    if trust_remote_code:
+        _check_trust_remote_code_allowlist(model_id, revision)
+
+    # Refuse to load if any .bin (pickle) weight files are present in a local path.
+    # safetensors-only is required; .bin files must never silently fall back to pickle.
+    local_path = Path(model_id)
+    if local_path.is_dir():
+        bin_files = list(local_path.rglob("*.bin"))
+        if bin_files:
+            raise ModelError(
+                f"Refused to load {model_id!r}: found unsafe .bin weight files "
+                f"that would be loaded via pickle: {[str(b) for b in bin_files]}. "
+                "Only safetensors weights are permitted."
+            )
+
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:  # pragma: no cover - exercised via the guard test
@@ -339,8 +381,10 @@ class EmbeddingAnalyzer:
 
 
 __all__ = [
+    "_NOMIC_CODERANKEEMBED_AUDITED_REVISION",
+    "_TRUST_REMOTE_CODE_ALLOWLIST",
     "EmbeddingAnalyzer",
     "EmbeddingEncoder",
+    "_check_trust_remote_code_allowlist",
     "load_sentence_transformer",
-    "_NOMIC_CODERANKEEMBED_AUDITED_REVISION",
 ]

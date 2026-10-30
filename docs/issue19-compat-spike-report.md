@@ -43,6 +43,7 @@ It converts 2D `(B, S)` binary masks to 4D `(B, 1, 1, S)` additive float masks u
 import types
 import torch
 
+
 def _nomic_bert_attention_mask_shim(self, attention_mask, input_shape, device=None, dtype=None):
     """Replaces removed transformers 4.x get_extended_attention_mask for NomicBert."""
     if attention_mask is None:
@@ -64,9 +65,7 @@ def _nomic_bert_attention_mask_shim(self, attention_mask, input_shape, device=No
 # Apply compat shim for NomicBert models under transformers>=5.x
 inner = model[0].auto_model
 if not hasattr(inner, "get_extended_attention_mask"):
-    inner.get_extended_attention_mask = types.MethodType(
-        _nomic_bert_attention_mask_shim, inner
-    )
+    inner.get_extended_attention_mask = types.MethodType(_nomic_bert_attention_mask_shim, inner)
 ```
 
 The guard `not hasattr(...)` ensures it is a no-op if a future transformers version restores the method or a different model is loaded.
