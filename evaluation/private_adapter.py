@@ -6,6 +6,7 @@ runs a ranker or emits a report as a side effect of loading inputs.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 from dataclasses import dataclass
@@ -118,6 +119,33 @@ def _location_id(location: dict[str, Any]) -> str:
     return f"{file}::{function or '<file>'}:{start or 0}-{end or 0}"
 
 
+def _function_span(source: str, name: str, start: int, end: int) -> str:
+    """Resolve a failing-state function from a clean-record location.
+
+    A single inserted mutation line may extend the containing function or shift
+    a later function. No other offset is accepted. Names and both bounds must
+    identify exactly one AST function; slicing the original range is unsafe.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        _reject("unparseable failing snapshot")
+    matches = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != name:
+            continue
+        actual_start, actual_end = node.lineno, node.end_lineno
+        if actual_end is None:
+            continue
+        shift = (actual_start - start, actual_end - end)
+        if shift in {(0, 0), (0, 1), (1, 1)}:
+            matches.append((actual_start, actual_end))
+    if len(matches) != 1:
+        _reject("ambiguous or mismatched function span")
+    actual_start, actual_end = matches[0]
+    return "".join(source.splitlines(keepends=True)[actual_start - 1 : actual_end])
+
+
 def _candidate(record_candidate: dict[str, Any], source: str) -> Candidate:
     location = record_candidate["location"]
     file = location["file"]
@@ -126,18 +154,20 @@ def _candidate(record_candidate: dict[str, Any], source: str) -> Candidate:
         _reject("invalid source location")
     start = location.get("start_line")
     end = location.get("end_line")
+    function = location.get("function")
     if (start is None) != (end is None) or (start is not None and (end < start)):
         _reject("invalid source location")
-    if start is not None:
+    if function is not None:
+        if not isinstance(function, str) or not function.strip() or start is None:
+            _reject("missing function source location")
+        source = _function_span(source, function, start, end)
+    elif start is not None:
         lines = source.splitlines(keepends=True)
         if start < 1 or end > len(lines):
             _reject("missing source location")
         source = "".join(lines[start - 1 : end])
     if not source.strip():
         _reject("missing source location")
-    function = location.get("function")
-    if function is not None and (not function.strip() or start is None):
-        _reject("missing function source location")
     return Candidate(
         id=_location_id(location),
         file_id=file,

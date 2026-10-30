@@ -29,7 +29,9 @@ avoids a second import path. (The issue's initial layout suggested a standalone
 
 The opt-in private input and candidate-parity contract is documented in
 [`docs/private-evaluation-adapter.md`](../docs/private-evaluation-adapter.md). It
-does not run held-out evaluation or produce Gate C scores.
+does not run held-out evaluation or produce Gate C scores. The opt-in v3
+scorer and current comparator hold are documented in
+[`docs/v3-evaluation-bridge.md`](../docs/v3-evaluation-bridge.md).
 
 ## Run it
 
