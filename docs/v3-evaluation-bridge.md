@@ -53,3 +53,7 @@ A separately reviewed protocol redesign would need a common retrieval pool and
 frame evidence, or explicitly change the comparator/KPI definition. Until then,
 **do not run the held-out measurement or claim the frozen Gate C KPI**. Public
 synthetic tests and `make check` are safe pre-acceptance verification only.
+
+## Issue #28 opt-in path
+
+`docs/shipped-baseline-common-pool.md` describes the new evaluator-owned full-tree/product-retrieval bridge. The comparator limitation above still applies to the older supplied-pool runner; it must not be presented as the shipped-baseline delta. No held-out Gate C run is part of this PR.

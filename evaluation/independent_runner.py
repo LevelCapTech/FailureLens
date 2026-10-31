@@ -229,7 +229,7 @@ def run_independent(
     actual model is bundled. Model factory is called once per seed before timing
     case inference; its load remains included in process peak RSS.
     """
-    if not cases or any(not case.request.candidates for case in cases):
+    if not cases:
         raise PrivateInputError("private evaluation rejected: missing cases")
     safe_metadata = _safe_metadata(metadata or {})
     required = {
@@ -385,13 +385,55 @@ def run_independent(
             "repositories": len(set(strata)),
             "function_labeled": sum(case.positive_function_ids is not None for case in cases),
             "function_missing": sum(case.positive_function_ids is None for case in cases),
+            "retrieval_abstentions": sum(not case.request.candidates for case in cases),
+            "retrieval_abstention_rate": sum(not case.request.candidates for case in cases)
+            / len(cases),
+            "positive_file_absent_from_pool": sum(
+                not (
+                    {candidate.file_id for candidate in case.request.candidates}
+                    & case.positive_file_ids
+                )
+                for case in cases
+            ),
+            "positive_function_absent_from_pool": sum(
+                case.positive_function_ids is not None
+                and not (
+                    {candidate.function_id for candidate in case.request.candidates}
+                    & case.positive_function_ids
+                )
+                for case in cases
+            ),
+            "retrieved_pool_file_recall": statistics.mean(
+                len(
+                    {candidate.file_id for candidate in case.request.candidates}
+                    & case.positive_file_ids
+                )
+                / len(case.positive_file_ids)
+                for case in cases
+            ),
+            "retrieved_pool_function_recall": _mean(
+                [
+                    len(
+                        {candidate.function_id for candidate in case.request.candidates}
+                        & case.positive_function_ids
+                    )
+                    / len(case.positive_function_ids)
+                    if case.positive_function_ids is not None
+                    else None
+                    for case in cases
+                ]
+            ),
         },
         "protocol": {
             "seeds": list(SEEDS),
             "bootstrap_seed": BOOTSTRAP_SEED,
             "bootstrap_replicates": BOOTSTRAP_REPLICATES,
             "bootstrap": "repository-stratified paired case percentile two-sided 95%",
-            "latency": "per-method per-case wall time; warm inference; model factory load separate",
+            "latency": (
+                "product retrieval precomputed; baseline lookup only; model rerank warm inference; model factory load separate"
+                if getattr(baseline, "latency_scope", None) == "precomputed-product-order-lookup"
+                else "per-method per-case wall time; warm inference; model factory load separate"
+            ),
             "memory": "process peak RSS including model load; Linux KiB macOS bytes",
         },
         "runs": runs,

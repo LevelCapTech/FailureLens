@@ -343,6 +343,8 @@ def run_ranker(case: PrivateCase, ranker: Ranker) -> RankResult:
     original = _request_digest(request.query, request.candidates, request.top_k)
     if original != request.digest:
         _reject("changed canonical request")
+    if not request.candidates:
+        return RankResult((), original, request.top_k)
     try:
         result = ranker(request)
     except Exception:
