@@ -20,7 +20,7 @@ This is a core research area for FailureLens.
 | `collection/` | Scripts/notes to collect real bug-fix data (commits, issues, tests). |
 | `generation/` | Pipeline to generate failures (e.g. mutation / bug injection) and capture logs. |
 | `preprocessing/` | Normalisation, tokenisation, candidate extraction, de-duplication. |
-| `validation/` | Quality gates: completeness, leakage checks, duplicate detection. |
+| `validation/` | Quality gates: completeness, leakage checks (`check_splits.py`), duplicate detection. |
 | `schemas/` | The canonical record schema (`record.schema.json`) and field docs. |
 | `fixtures/` | Tiny checked-in examples that conform to the schema (for tests/docs). |
 | `generated/` | One manual Gate A pilot record, metadata manifest, and offline verification script; not an evaluation set. |

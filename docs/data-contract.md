@@ -99,6 +99,14 @@ Split by **repository** and by **bug-fix case**; variants derived from one bug
 stay on the **same** side. Hold the **evaluation labels apart** from model
 development and never tune on the evaluation set. See `datasets/validation/`.
 
+Leakage detection is implemented: `failurelens.split_leakage.find_split_leaks`
+reports any repository (compared after normalization: case, trailing `/`, `.git`)
+or `record_id` that appears in more than one split, and fails closed on a record
+without a `source_repository`. `datasets/validation/check_splits.py` runs it
+together with the semantic gates over named splits and exits non-zero on any leak
+or rejected record. Assigning the splits (choosing which repositories go to
+`eval`) is still a human-approved step and is not automated here.
+
 ## Secrets and personal data
 
 Never commit secrets, credentials, tokens, or personal data in code, fixtures,
