@@ -224,3 +224,6 @@ __marimo__/
 models/cache/
 *.safetensors
 *.bin
+
+# Local Git worktrees
+/.worktrees/

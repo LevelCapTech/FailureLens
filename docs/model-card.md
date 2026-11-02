@@ -1,11 +1,13 @@
 # Model card — FailureLens
 
-> **Status: trained artifact exists; Gate C evaluation pending; no publication
-> decision yet.** A fine-tuned bi-encoder (`failurelens-coderankeembed-stage2-v3`)
-> has been trained and its artifact verified. Gate C (independent held-out
-> evaluation) has not yet run. Gate D (adoption/publication) requires an explicit
-> human-owner decision after Gate C. Do not cite any quality numbers from this
-> card that are not produced by the evaluation harness on committed data.
+> **Status: an experimental cloud rebuild is published; Gate C evaluation remains
+> pending.** The owner explicitly approved the bounded Hugging Face Job and
+> publication of its rebuilt model. The Job completed and the published model
+> passed Hub reload verification. This does not establish superiority,
+> production readiness, or adoption.
+> Do not cite quality numbers that are not produced by the evaluation harness
+> on committed data. The local v3 artifact below and the cloud rebuild are
+> distinct artifacts with their own checksums.
 
 ## Summary
 
@@ -14,7 +16,7 @@
 | Name | FailureLens CodeRankEmbed Stage 2 v3 |
 | Task | Fault localization — rank candidate code locations for a failure |
 | Base model | `nomic-ai/CodeRankEmbed` @ `3c4b60807d71f79b43f3c4363786d9493691f8b1` (MIT) |
-| Fine-tuning method | Last NomicBertBlock encoder layer only (LoRA-equivalent partial fine-tune) |
+| Fine-tuning method | Last NomicBertBlock encoder layer only (partial fine-tuning) |
 | Trainable params | 9,440,256 / 136,731,648 total (~6.9%) |
 | Artifact SHA-256 | `506492b034fadb3d7ee6e7288d04b66dfa477c25b1de41d9d70166353cd343d4` |
 | Artifact path (private) | `~/.local/share/failurelens/experiment-issue19-stage2-v3/model_final.safetensors` |
@@ -23,10 +25,36 @@
 | Runtime | CPU or CUDA; offline after model cache |
 | Code git SHA | `795b0a1c6f94198d93ebd36e45d3d61e8574549e` |
 | Trained weights in Git | No |
-| Trained weights on HF Hub | No (Gate D not approved) |
+| Trained weights on HF Hub | A distinct cloud rebuild is published; see below and the [Job runbook](hf-jobs-publication.md) |
 | Gate C evaluation | Not yet run |
-| Gate D adoption/publication | Not yet approved |
+| Gate D adoption/publication | Experimental publication approved; adoption not established |
 | Shipped baseline (for comparison) | `analysis_method = baseline-stacktrace-lexical` |
+
+## Published cloud rebuild (2026-11-02)
+
+The public [LevelCapTech/failurelens](https://huggingface.co/LevelCapTech/failurelens)
+model was rebuilt on Hugging Face Jobs using the same 6/6 training recipe.
+It is distinct from the historical local v3 artifact listed above.
+
+| Field | Verified value |
+|-------|----------------|
+| Final Hub revision | `2426e838cf922a26e22836a4f93b3f135b4f2005` |
+| Weights revision pinned in the runnable example | `ec8ffde17b5cf5a5bf6f206864fdbe985f373440` |
+| Weights SHA-256 | `8e8fb971f8c1dce22ae29ea4f682cb8387790ad608e06d3800b62d3413a0a9e4` |
+| Weights size | 546,938,144 bytes, safetensors |
+| Training source | `2985bfcfbf5bf79bc3b3b0589284f6a4ca481970` |
+| Completed Job | [6ae7d7a8c78863f9c62ff0e8](https://huggingface.co/jobs/LevelCapTech/6ae7d7a8c78863f9c62ff0e8) |
+| Hardware | Tesla T4, 15,095 MiB detected VRAM |
+| Training duration | 7.6 seconds (excludes setup, downloads, export and verification) |
+| Peak allocated GPU memory | 885 MiB |
+| Effective model sequence limit | 8192 tokens; longest observed training feature: 991 tokens |
+| Verification | Exact trained tensors, offline CPU embeddings, Hub reload output parity, anonymous access and all manifest digests |
+
+The Hub model card contains the supported standalone SentenceTransformers
+example with an immutable revision. The generic FailureLens `from_pretrained`
+path does not yet allow this trained repository's custom code and uses a
+different query transform. The offline baseline remains the default working
+library interface. No independent accuracy or superiority result is implied.
 
 ## Intended use
 
@@ -75,7 +103,7 @@ each candidate code fragment against the query in a shared retrieval pool.
 | Batch size | 2 |
 | Epochs | 3 |
 | Seed | 42 |
-| Max sequence length | 512 |
+| Effective model sequence limit | 8192 (legacy config's `max_length=512` is not applied by the training function) |
 
 ## Training results (v3, seed=42)
 
@@ -127,16 +155,16 @@ Gate A measured results (n=1, single fixture case, not generalisable):
 | Gate B — Acceptance criteria frozen | Done (2026-10-29, human-owner approved) |
 | Implementation Go | Done (2026-10-29, human-owner approved) |
 | Gate C — Independent held-out evaluation | **Not yet run** (blocked by comparator protocol review) |
-| Gate D — Adoption / publication | **Not yet approved** |
+| Gate D — Adoption / publication | Owner approved experimental cloud publication; adoption decision remains separate |
 
 ## Licensing
 
 - Repository source: Apache-2.0
 - Base model (`nomic-ai/CodeRankEmbed`): MIT
-- Fine-tuned weights: **license not yet determined**. A derivative of an MIT
-  base model is compatible with MIT, but the license for the published weights
-  must be decided and verified by the human owner before any release. Apache-2.0
-  is not assumed to apply to weights.
+- Cloud-release fine-tuned weights: MIT, following the base model's declared
+  license. Upstream model-code headers and license notices are retained,
+  including the BSD-3-Clause notice for the FlashAttention-derived code.
+  Apache-2.0 covers the repository source and build script.
 - Training data: private synthetic records; rights reviewed per `docs/data-contract.md`.
 
 ## Provenance
