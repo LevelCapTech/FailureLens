@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hugging Face Jobsでモデル公開"
+  short_description: "大容量のローカル送信を避け、Jobsでモデルをビルド・公開・検証"
+  default_prompt: "$hf-jobs-publish-model を使って、Hugging Face Jobsでモデルをビルドして公開し、公開後の読み込みまで検証してください。"

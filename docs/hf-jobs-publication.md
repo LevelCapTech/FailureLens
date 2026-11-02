@@ -125,3 +125,14 @@ raw records, held-out records/labels and optimizer checkpoints are excluded.
 The model card documents the standalone SentenceTransformers interface; it does
 not claim that the generic FailureLens `from_pretrained` path already supports
 the trained repository's custom code or training-specific query transform.
+
+## Reusable agent skill
+
+The versioned
+[`hf-jobs-publish-model` skill](../.agents/skills/hf-jobs-publish-model/SKILL.md)
+captures the cloud build, transfer and budget boundaries, retry handling, and
+verification of the published revision. Invoke it with `$hf-jobs-publish-model`.
+Its bundled inspection helper reads Job states and model metadata without
+creating Jobs, changing repositories, or downloading weights. The skill includes
+offline regression tests; creating or invoking it does not itself authorize a
+new paid Job or private-data transfer.
