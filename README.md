@@ -1,5 +1,7 @@
 # FailureLens
 
+[English](README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [한국어](README.ko.md)
+
 **AI-powered fault localization & developer toolkit.** Given a failure log (stack
 trace) and a source repository, FailureLens ranks the code locations most likely
 responsible for the failure — and shows the **evidence** for each — so developers,
