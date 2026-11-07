@@ -18,8 +18,11 @@ only add Claude Code specifics and never override it.
 - Do not publish, release, upload models or datasets, start training runs, or
   fetch new data without explicit approval from a maintainer. Approval for one
   of these does not extend to another.
-- Commit or push only when asked. Do not use `git add -A`; stage named files so
-  local-only files are never included.
+- Commit after each logical unit of work, one Conventional Commit per unit
+  (`type(scope): subject`), after `make check` passes. Do not mix unrelated
+  changes in one commit. Push only when asked.
+- Do not use `git add -A`; stage named files so local-only files are never
+  included.
 - Before editing, check `git status`: the working tree may contain in-progress
   changes that are not yours.
 
