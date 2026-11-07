@@ -28,7 +28,7 @@ from evaluation.private_adapter import (
 from failurelens import FailureLens
 from failurelens.config import IndexConfig
 from failurelens.indexing.repository import _is_excluded, iter_source_files
-from failurelens.schemas import AnalysisStatus
+from failurelens.schemas import AnalysisStatus, UnitKind
 
 
 def _reject(reason: str) -> None:
@@ -224,6 +224,45 @@ def _product_candidate(
     )
 
 
+def full_pool_candidates(root: Path, index: Any) -> tuple[Candidate, ...]:
+    """Every function and method the product indexer found, as ranking candidates.
+
+    Candidate identity and text follow ``_product_candidate`` (same ID format and span
+    slicing); each file is read once. Class and module units are excluded. Sorted by ID.
+    """
+    found: dict[str, Candidate] = {}
+    for file_index in sorted(index.files, key=lambda item: item.path):
+        units = [u for u in file_index.units if u.kind in {UnitKind.FUNCTION, UnitKind.METHOD}]
+        if not units:
+            continue
+        path = _relative(file_index.path)
+        try:
+            lines = (root / path).read_text(encoding="utf-8").splitlines(keepends=True)
+        except (OSError, UnicodeError):
+            _reject("unreadable retrieved source")
+        for unit in units:
+            if unit.end_line > len(lines):
+                _reject("missing function span")
+            span = "".join(lines[unit.start_line - 1 : unit.end_line])
+            if not span.strip():
+                continue
+            location = {
+                "file": path,
+                "function": unit.name,
+                "start_line": unit.start_line,
+                "end_line": unit.end_line,
+            }
+            identifier = _location_id(location)
+            found[identifier] = Candidate(
+                identifier,
+                path,
+                f"{path}::{unit.name}",
+                span,
+                hashlib.sha256(span.encode()).hexdigest(),
+            )
+    return tuple(found[key] for key in sorted(found))
+
+
 class ProductBaseline:
     """Frozen ordered product output keyed by the exact unlabeled request digest.
 
@@ -252,8 +291,17 @@ def load_product_cases(
     top_k: int,
     production: bool = True,
     allow_ambiguous_retrieved_names: bool = False,
+    pool: str = "stack",
 ) -> tuple[tuple[PrivateCase, ...], ProductBaseline]:
-    """Build an all-case shared pool, preserving labels only evaluator-side."""
+    """Build an all-case shared pool, preserving labels only evaluator-side.
+
+    ``pool="stack"`` (default) pools only the shipped baseline's retrieved locations.
+    ``pool="full"`` pools every function/method of the verified failing tree; the
+    shipped baseline's order is then its retrieved functions first, followed by all
+    remaining candidates in ID order.
+    """
+    if pool not in {"stack", "full"}:
+        _reject("invalid pool mode")
     try:
         original = load_private_cases(
             records_path,
@@ -333,13 +381,23 @@ def load_product_cases(
             verify_failing_tree(entries[record["record_id"]], record["source_commit"])
             candidates = tuple(
                 _product_candidate(
-                    item, root, index, allow_ambiguous_names=allow_ambiguous_retrieved_names
+                    item,
+                    root,
+                    index,
+                    allow_ambiguous_names=allow_ambiguous_retrieved_names or pool == "full",
                 )
                 for item in result.candidates
             )
             ids = tuple(item.id for item in candidates)
             if len(ids) != len(set(ids)) or len(ids) > capacity:
                 _reject("ambiguous product retrieval")
+            if pool == "full":
+                candidates = full_pool_candidates(root, index)
+                members = {item.id for item in candidates}
+                if not candidates or len(members) != len(candidates):
+                    _reject("invalid full pool")
+                ids = tuple(item for item in ids if item in members)
+                ids = ids + tuple(item.id for item in candidates if item.id not in set(ids))
             query = _query(raw_log, record.get("stack_trace"))
             request = RankRequest(
                 query, candidates, top_k, _request_digest(query, candidates, top_k)
