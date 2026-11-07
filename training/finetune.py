@@ -314,7 +314,7 @@ def _run_stage2_finetune(
             optimizer,
             scheduler,
             expected_model_revision=_REVISION,
-            expected_data_digest=_EXPECTED_DATA_DIGEST,
+            expected_data_digest=config.get("dataset_sha256", _EXPECTED_DATA_DIGEST),
             expected_config=config,
         )
 
@@ -322,7 +322,7 @@ def _run_stage2_finetune(
         "git_sha": _git_sha(),
         "model_id": _MODEL_ID,
         "model_revision": _REVISION,
-        "dataset_sha256": _EXPECTED_DATA_DIGEST,
+        "dataset_sha256": config.get("dataset_sha256", _EXPECTED_DATA_DIGEST),
         "n_train": len(train_examples),
         "n_val": len(val_examples),
         "trainable_params": trainable,

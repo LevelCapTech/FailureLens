@@ -9,3 +9,26 @@ Rights were checked against license text at each pinned upstream commit. This co
 | `pypa/pip` | `1000636317b856a7a8d0ae6662c3eb30c2a9bfed` | [`LICENSE.txt`](https://github.com/pypa/pip/blob/1000636317b856a7a8d0ae6662c3eb30c2a9bfed/LICENSE.txt), MIT text | 144 | Yes | Yes; retain notice | Own generated logs only | Rights-cleared source |
 
 The license files were read at the pinned commits. Counts use `find tests -name 'test*.py' | wc -l`. These are source candidates, not accepted cases. Each record still requires pass-before/fail-after execution, secret/PII screening, and a root-cause rationale.
+
+
+## v0.2 corpus sources (train and dev; added 2026-11-07)
+
+Additional permissively licensed, pure-Python sources for the v0.2 private synthetic corpus (`docs/corpus-v02.md`). Each license file was read at the pinned commit and its text classified (MIT or BSD-3-Clause) by `training/corpus/build.py prepare`, which also checks that the pin is the checked-out HEAD and that the clone is clean. The same conditions as above apply: local synthetic mutation and own-generated logs only, no authorization to redistribute derived records, retain notices on any redistribution, no endorsement. `python-attrs/attrs` (MIT, pin in `docs/issue17-private-training-handoff.md`) stays train-only and is not regenerated here.
+
+The splits are by repository. **Train and dev share no repository, and neither contains `psf/requests`, `pallets/werkzeug` or `pypa/pip`** (the Gate C hold-out above); `training/corpus/repos.py` fails closed if that is violated.
+
+| Source | Pin | License evidence | Split | Status |
+|---|---|---|---|---|
+| `pallets/click` | `2247b35ea1c47c727d7a06e51fa280e12a863ff6` | [`LICENSE.txt`](https://github.com/pallets/click/blob/2247b35ea1c47c727d7a06e51fa280e12a863ff6/LICENSE.txt), BSD-3-Clause text (blob SHA-256 `9a8ad106a394e853...`) | train | Rights-cleared source; probe validation pending |
+| `more-itertools/more-itertools` | `f42daddf205f335fea6e200dad46049f33e71221` | [`LICENSE`](https://github.com/more-itertools/more-itertools/blob/f42daddf205f335fea6e200dad46049f33e71221/LICENSE), MIT text (blob SHA-256 `09f1c8c9e941af3e...`) | train | Rights-cleared source; probe validation pending |
+| `pytoolz/toolz` | `451af60dec590a6010e2babdbf391ea8f815122f` | [`LICENSE.txt`](https://github.com/pytoolz/toolz/blob/451af60dec590a6010e2babdbf391ea8f815122f/LICENSE.txt), BSD-3-Clause text (blob SHA-256 `053664057b295b2f...`) | train | Rights-cleared source; probe validation pending |
+| `astanin/python-tabulate` | `268615a5c27dc40e5c22454c07b44d5c50410da0` | [`LICENSE`](https://github.com/astanin/python-tabulate/blob/268615a5c27dc40e5c22454c07b44d5c50410da0/LICENSE), MIT text (blob SHA-256 `cdfab50d37d8ead0...`) | train | Rights-cleared source; probe validation pending |
+| `kjd/idna` | `d357725082245ff90f5cf8800a3fc297b1f2319a` | [`LICENSE.md`](https://github.com/kjd/idna/blob/d357725082245ff90f5cf8800a3fc297b1f2319a/LICENSE.md), BSD-3-Clause text (blob SHA-256 `1a9a4f0e3d479a27...`) | train | Rights-cleared source; probe validation pending |
+| `jpvanhal/inflection` | `88eefaacf7d0caaa701af7c8ab2d0ab3f17086f1` | [`LICENSE`](https://github.com/jpvanhal/inflection/blob/88eefaacf7d0caaa701af7c8ab2d0ab3f17086f1/LICENSE), MIT text (blob SHA-256 `9e9f9b4b2e7543ad...`) | train | Rights-cleared source; probe validation pending |
+| `pallets/itsdangerous` | `672971d66a2ef9f85151e53283113f33d642dabd` | [`LICENSE.txt`](https://github.com/pallets/itsdangerous/blob/672971d66a2ef9f85151e53283113f33d642dabd/LICENSE.txt), BSD-3-Clause text (blob SHA-256 `63af09891b6be8ad...`) | train | Rights-cleared source; probe validation pending |
+| `andialbrecht/sqlparse` | `09dbe1eec31ed1b3cd05366748865f11ba427d32` | [`LICENSE`](https://github.com/andialbrecht/sqlparse/blob/09dbe1eec31ed1b3cd05366748865f11ba427d32/LICENSE), BSD-3-Clause text (blob SHA-256 `c1938235b80d39e9...`) | dev | Rights-cleared source; probe validation pending |
+| `python-humanize/humanize` | `d16e6352c9785c5ab86de0133222bd22e89b0db2` | [`LICENCE`](https://github.com/python-humanize/humanize/blob/d16e6352c9785c5ab86de0133222bd22e89b0db2/LICENCE), MIT text (blob SHA-256 `8ba6c18112a43140...`) | dev | Rights-cleared source; probe validation pending |
+| `mahmoud/boltons` | `d31d821d56c8f7756af9c30a864077f2e5855321` | [`LICENSE`](https://github.com/mahmoud/boltons/blob/d31d821d56c8f7756af9c30a864077f2e5855321/LICENSE), BSD-3-Clause text (blob SHA-256 `617273daf4b7b4fb...`) | dev | Rights-cleared source; probe validation pending |
+| `jmespath/jmespath.py` | `2812594e69d43098ef60f81f4efc404c071b0418` | [`LICENSE`](https://github.com/jmespath/jmespath.py/blob/2812594e69d43098ef60f81f4efc404c071b0418/LICENSE), MIT text (blob SHA-256 `6eefacfa4d71b82d...`) | dev | Rights-cleared source; probe validation pending |
+
+These are source candidates, not accepted cases. Records exist only after the target project's own tests pass on the clean tree and fail after one exact single-line mutation, and pass the schema and semantic gates.
