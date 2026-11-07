@@ -178,7 +178,9 @@ def verify_failing_tree(entry: dict[str, Any], commit: str) -> Path:
     return root
 
 
-def _product_candidate(output: Any, root: Path, index: Any) -> Candidate:
+def _product_candidate(
+    output: Any, root: Path, index: Any, *, allow_ambiguous_names: bool = False
+) -> Candidate:
     file = _relative(output.file)
     indexed = index.file(file)
     if indexed is None:
@@ -201,7 +203,10 @@ def _product_candidate(output: Any, root: Path, index: Any) -> Candidate:
             if unit.name == function and unit.start_line == start and unit.end_line == end
         ]
         same_name = [unit for unit in indexed.units if unit.name == function]
-        if len(matches) != 1 or len(same_name) != 1:
+        # Strict (default): the retrieved name must be unique in its file. Opt-in: only the
+        # exact (name, start, end) unit must be unique, so real repositories with repeated
+        # method names can be pooled; positive labels still require unique names (below).
+        if len(matches) != 1 or (len(same_name) != 1 and not allow_ambiguous_names):
             _reject("ambiguous or missing function span")
         lines = source.splitlines(keepends=True)
         if end > len(lines):
@@ -246,6 +251,7 @@ def load_product_cases(
     *,
     top_k: int,
     production: bool = True,
+    allow_ambiguous_retrieved_names: bool = False,
 ) -> tuple[tuple[PrivateCase, ...], ProductBaseline]:
     """Build an all-case shared pool, preserving labels only evaluator-side."""
     try:
@@ -325,7 +331,12 @@ def load_product_cases(
             if result.status != AnalysisStatus.OK and result.candidates:
                 _reject("invalid product retrieval")
             verify_failing_tree(entries[record["record_id"]], record["source_commit"])
-            candidates = tuple(_product_candidate(item, root, index) for item in result.candidates)
+            candidates = tuple(
+                _product_candidate(
+                    item, root, index, allow_ambiguous_names=allow_ambiguous_retrieved_names
+                )
+                for item in result.candidates
+            )
             ids = tuple(item.id for item in candidates)
             if len(ids) != len(set(ids)) or len(ids) > capacity:
                 _reject("ambiguous product retrieval")
