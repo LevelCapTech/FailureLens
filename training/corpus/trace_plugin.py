@@ -13,9 +13,11 @@ Only functions defined under ``FL_TRACE_ROOT`` and outside ``FL_TRACE_SKIP``
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import os
 import sys
+import types
 from typing import Any
 
 _ROOT = os.path.realpath(os.environ.get("FL_TRACE_ROOT", os.getcwd())) + os.sep
@@ -27,6 +29,60 @@ _outcomes: dict[str, str] = {}
 _calls: dict[str, set[tuple[str, str, int]]] = {}
 _state: dict[str, set[tuple[str, str, int]] | None] = {"current": None}
 _cache: dict[str, str | None] = {}
+
+
+def _local_packages() -> dict[str, str]:
+    """Map package names to directories for packages that live inside the target checkout."""
+    found: dict[str, str] = {}
+    root = _ROOT.rstrip(os.sep)
+    for base in (os.path.join(root, "src"), root):
+        try:
+            entries = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for entry in entries:
+            path = os.path.join(base, entry)
+            if os.path.isfile(os.path.join(path, "__init__.py")):
+                found.setdefault(entry, path)
+    return found
+
+
+def _install_environment_shims() -> None:
+    """Stand in for what ``pip install -e`` would provide, without installing anything.
+
+    The checkout is used in place on ``PYTHONPATH``. Two things a real install
+    supplies are emulated in memory (the checkout is never modified): a VCS
+    generated ``_version`` module, and distribution metadata for the package itself.
+    """
+    packages = _local_packages()
+    for name, path in packages.items():
+        init = os.path.join(path, "__init__.py")
+        try:
+            with open(init, encoding="utf-8") as handle:
+                text = handle.read()
+        except (OSError, UnicodeDecodeError):
+            continue
+        if "._version" in text and not os.path.exists(os.path.join(path, "_version.py")):
+            stub = types.ModuleType(f"{name}._version")
+            stub.__version__ = "0.0.0+sandbox"  # type: ignore[attr-defined]
+            stub.version = "0.0.0+sandbox"  # type: ignore[attr-defined]
+            sys.modules[stub.__name__] = stub
+
+    original = importlib.metadata.version
+
+    def version(distribution_name: str) -> str:
+        try:
+            return original(distribution_name)
+        except importlib.metadata.PackageNotFoundError:
+            normalized = distribution_name.lower().replace("-", "_").replace(".", "_")
+            if normalized in packages:
+                return "0.0.0+sandbox"
+            raise
+
+    importlib.metadata.version = version
+
+
+_install_environment_shims()
 
 
 def _relative(filename: str) -> str | None:

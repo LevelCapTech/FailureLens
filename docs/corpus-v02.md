@@ -1,9 +1,9 @@
 # v0.2 private fault corpus (train and dev)
 
-**Status: generator, loader, manifests and candidate configs are implemented and
-tested on a synthetic project. The corpus itself has not been generated yet, so
-there are no record counts, no validation numbers and no model results.** Do not
-cite numbers from this page; the build prints its own aggregate report.
+**Status: the corpus was generated on 2026-11-07 inside a network-less Docker
+sandbox and passed the automated gates (178 train and 62 dev records; counts
+below). No model has been trained on it yet and there are no model results.**
+Counts are aggregate only; record content stays in the private directory.
 
 This page describes how the v0.2 training set and a separate development
 (model-selection) set are produced. It does not authorize training, release or
@@ -56,19 +56,72 @@ test loads them through both loaders.
 
 ## Running it (opt-in, never in CI)
 
-The generator executes third-party test code. Run it only on the pinned,
-license-reviewed repositories, in the dedicated virtualenv, from a trusted shell:
+The generator executes third-party test code, so it never runs on the host.
+`training/corpus/sandbox/sandbox_python.sh` is a drop-in `--python` that runs the
+interpreter in a container with: `--network none`, the host (non-root) uid, a
+read-only root file system, all capabilities dropped, `no-new-privileges`, 3 GiB
+memory / 2 CPU / 512 pids limits, a 60 s per-test timeout (`pytest-timeout`) and a
+hard 1500 s in-container timeout. Only the private work copy of one repository, the
+`PYTHONPATH` directories (read-only) and the trace output directory are mounted;
+`$HOME`, `~/.ssh`, `~/.config` and tokens are not. The image is built from a
+digest-pinned `python:3.12-slim` with hash-pinned wheels
+(`training/corpus/sandbox/requirements-sandbox.txt`); the build is the only
+network-enabled step. The trace plugin emulates what an editable install would
+provide (a generated `_version` module and `importlib.metadata.version`) in
+memory, so the checkouts are not modified.
 
 ```bash
+docker build -t failurelens-corpus-sandbox:v02 training/corpus/sandbox
 ROOT=~/.local/share/failurelens/v02-corpus
-PYTHONPATH=packages/python/src:. python -m training.corpus.build prepare  --root $ROOT --python $ROOT/venv/bin/python
-PYTHONPATH=packages/python/src:. python -m training.corpus.build generate --root $ROOT --python $ROOT/venv/bin/python
-PYTHONPATH=packages/python/src:. python -m training.corpus.build finalize --root $ROOT --python $ROOT/venv/bin/python
+SANDBOX=$PWD/training/corpus/sandbox/sandbox_python.sh
+PYTHONPATH=packages/python/src:. python -m training.corpus.build prepare  --root $ROOT --python $SANDBOX
+PYTHONPATH=packages/python/src:. python -m training.corpus.build generate --root $ROOT --python $SANDBOX \
+  --train-target 40 --dev-target 20 --jobs 3
+PYTHONPATH=packages/python/src:. python -m training.corpus.build finalize --root $ROOT --python $SANDBOX
 ```
 
-`finalize` prints an aggregate report and the **corpus digest**. Put the digest
-into `dataset_sha256` of `training/configs/stage2_v02_*.json` (committed configs
-carry the placeholder `PENDING_CORPUS_BUILD`, which the loader refuses).
+`generate` is resumable per repository (a finished repository is skipped unless
+`--force`). One repository's very large parametrized file is excluded in
+`training/corpus/repos.py` (`click`: `test_stream_lifecycle.py`, about 30k cases).
+
+## Result of the 2026-11-07 build (aggregate)
+
+Corpus digest (`corpus_sha256`):
+`fd229415d23cbf8a0872a480746a3b11a576d120886dfefc056bf0c66ab48255`.
+Train overlap with dev: 0 repositories. Overlap with the Gate C hold-out: 0.
+
+| Split | Kept | Input | Dropped by the gates |
+| --- | ---: | ---: | --- |
+| train | 178 | 196 | 12 duplicate, 9 PII-pattern |
+| dev | 62 | 70 | 6 duplicate, 1 environment failure, 1 secret-pattern |
+
+| Repository | Split | Records |
+| --- | --- | ---: |
+| pytoolz/toolz | train | 39 |
+| pallets/click | train | 38 |
+| kjd/idna | train | 33 |
+| more-itertools/more-itertools | train | 26 |
+| astanin/python-tabulate | train | 16 |
+| jpvanhal/inflection | train | 14 |
+| pallets/itsdangerous | train | 12 |
+| python-humanize/humanize | dev | 19 |
+| mahmoud/boltons | dev | 18 |
+| andialbrecht/sqlparse | dev | 16 |
+| jmespath/jmespath.py | dev | 9 |
+
+Mutation kinds (train / dev): raised exception 38 / 14, early-return None 35 / 9,
+wrong-value return 32 / 11, comparison-operator flip 19 / 7, constant off-by-one
+17 / 4, negation removal 14 / 5, arithmetic-operator flip 11 / 5, boolean-operator
+flip 7 / 5, boolean constant flip 5 / 2.
+
+Candidate mutations that no test detected were dropped rather than kept (for
+example 32 of 72 attempts for `click` and 26 of 54 for `more-itertools`), and 17
+`humanize` attempts were rejected because the failure log had no usable Python
+traceback. `python-attrs/attrs` was not regenerated in this build and contributes no v0.2 records.
+
+The configs `training/configs/stage2_v02_{a,b,c}.json` carry this digest in
+`dataset_sha256`; the loader refuses a corpus whose digest differs.
+
 `finetune_train.py` selects the v0.2 loader when a config has
 `"corpus": "failurelens-corpus-v02"`. Train records become training examples; dev
 records become the validation examples.
