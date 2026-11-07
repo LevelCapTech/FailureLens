@@ -46,7 +46,8 @@ REPOSITORIES: tuple[SourceRepo, ...] = (
         "train",
         ("src/click/",),
         ("src/click/_winconsole.py", "src/click/parser.py"),
-        ("tests",),
+        # test_stream_lifecycle.py expands to ~30k parametrized cases (hours); skip it.
+        ("tests", "--ignore=tests/test_stream_lifecycle.py"),
         "src",
         "LICENSE.txt",
     ),
