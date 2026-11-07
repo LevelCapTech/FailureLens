@@ -9,8 +9,13 @@ second - the test encodes that real behaviour rather than an aspirational score.
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HARNESS_PATH = REPO_ROOT / "evaluation" / "run_baseline_eval.py"
@@ -43,3 +48,43 @@ def test_harness_reports_real_metrics_on_fixture() -> None:
     assert function_level["top_1_accuracy"] == 0.0
     assert function_level["mrr"] == 0.5
     assert function_level["top_5_accuracy"] == 1.0
+
+
+def test_unlabelled_functions_and_empty_benchmarks_have_no_invented_measurements(
+    tmp_path: Path,
+) -> None:
+    harness = _load_harness()
+    benchmark = json.loads(BENCHMARK_PATH.read_text())
+    for case in benchmark["cases"]:
+        case.pop("relevant_functions", None)
+    path = tmp_path / "files-only.json"
+    path.write_text(json.dumps(benchmark))
+    report = harness.run(path)
+    assert "function_level" not in report
+    assert report["performance"]["diagnosis_mean_ms"] >= 0
+    path.write_text('{"cases": []}')
+    empty = harness.run(path)
+    assert "function_level" not in empty
+    assert "performance" not in empty
+
+
+def test_plain_harness_does_not_import_optional_stacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://unused.invalid")
+    script = """
+import importlib.abc
+import runpy
+import sys
+
+class BlockOptional(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".")[0] in {"mlflow", "torch", "transformers", "sentence_transformers"}:
+            raise AssertionError("Unexpected optional import: " + fullname)
+
+sys.meta_path.insert(0, BlockOptional())
+sys.argv = ["evaluation/run_baseline_eval.py"]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    )
+    assert json.loads(completed.stdout)["analysis_method"] == "baseline-stacktrace-lexical"
