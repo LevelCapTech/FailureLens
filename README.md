@@ -1,5 +1,7 @@
 # FailureLens
 
+[English](README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [한국어](README.ko.md)
+
 **AI-powered fault localization & developer toolkit.** Given a failure log (stack
 trace) and a source repository, FailureLens ranks the code locations most likely
 responsible for the failure — and shows the **evidence** for each — so developers,
@@ -10,9 +12,12 @@ CI systems, and AI coding agents can go straight to the root cause.
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](docs/installation.md)
 
 > **Honest status.** FailureLens ships a **working, dependency-light baseline**
-> today (stack-trace + lexical, CPU-only, no network). It has **not** published a
-> trained model yet, and makes **no** benchmark/accuracy claims that aren't
-> produced by the evaluation harness. Planned work is clearly labelled as such.
+> (stack-trace + lexical, CPU-only, no network). An **experimental trained
+> encoder** is published at [LevelCapTech/failurelens](https://huggingface.co/LevelCapTech/failurelens).
+> Independent held-out evaluation is pending; superiority over the baseline or
+> base encoder is not established. Use the standalone SentenceTransformers
+> example on the model card: the library's generic `from_pretrained` path does
+> not yet support this trained repository's custom code and query transform.
 
 ## Why FailureLens?
 
@@ -86,8 +91,8 @@ packages/python/   The installable library + `failurelens` CLI (the product)
 examples/          Runnable demos + the sample fixture
 evaluation/        Honest benchmark harness, metrics docs, reports
 datasets/          Data record schema + pipeline design (no large/fabricated data)
-models/            Model configs/architecture (planned; no weights in git)
-training/          Training pipeline (planned; never runs in CI)
+models/            Model design (weights hosted separately, never in git)
+training/          Experimental GPU fine-tuning + CPU toy pipeline (opt-in)
 docs/              Full specification set (start at docs/architecture.md)
 AGENTS.md          Single source of truth for contributors & AI agents
 ```
@@ -113,6 +118,12 @@ AGENTS.md          Single source of truth for contributors & AI agents
 
 ## Development
 
+Optional MLflow tracking records evaluation metrics, diagnosis timings and
+training loss curves for comparison across changes. See the
+[experiment tracking guide](docs/experiment-tracking.md), or run
+`make tracking-install`, `make eval-track`, then `make mlflow-ui` in your
+development environment.
+
 ```bash
 make install     # editable install with dev tools
 make check       # ruff lint + format check + mypy (strict) + pytest  (mirrors CI)
@@ -129,6 +140,6 @@ and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE). Note that any *future* trained model's
-license depends on its base model and training data and is **not** assumed to be
-Apache-2.0 (see [docs/model-card.md](docs/model-card.md)).
+Apache-2.0 covers this repository's source — see [LICENSE](LICENSE). The
+published experimental model uses MIT for its weights and retains upstream
+code notices; see [docs/model-card.md](docs/model-card.md).

@@ -29,6 +29,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from failurelens.experiment_tracking import ExperimentRun, MLflowConfig, track_experiment
+
 _MODEL_ID = "nomic-ai/CodeRankEmbed"
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
 _EXPECTED_DATA_DIGEST = "74909f51b588c311de798bee29b748cfc1ead65fd2948053c8f3a1c729e465c1"
@@ -231,7 +233,7 @@ def _load_checkpoint(
     return meta["epoch"], meta["history"]
 
 
-def run_stage2_finetune(
+def _run_stage2_finetune(
     config: dict[str, Any],
     *,
     train_examples: list[Any],
@@ -239,6 +241,7 @@ def run_stage2_finetune(
     output_dir: Path | None = None,
     resume_from: Path | None = None,
     model_cache_dir: str | None = None,
+    experiment: ExperimentRun,
 ) -> dict[str, Any]:
     """Run Stage 2 CodeRankEmbed fine-tuning experiment.
 
@@ -329,6 +332,8 @@ def run_stage2_finetune(
         "device_name": torch.cuda.get_device_name(0),
         "device_memory_mib": torch.cuda.get_device_properties(0).total_memory // (1024 * 1024),
     }
+    experiment.log_params({key: value for key, value in run_metadata.items() if key != "platform"})
+    experiment.log_params({"resume_epoch": start_epoch})
 
     t_start = time.monotonic()
 
@@ -369,6 +374,15 @@ def run_stage2_finetune(
                 n_val_batches += 1
             avg_val = val_loss / max(1, n_val_batches)
             history["val_loss"].append(avg_val)
+
+        experiment.log_metrics(
+            {
+                "train.loss": avg_train,
+                "validation.loss": avg_val,
+                "train.learning_rate": scheduler.get_last_lr()[0],
+            },
+            step=epoch,
+        )
 
         ckpt_dir = output_root / f"checkpoint_epoch_{epoch}"
         _save_checkpoint(
@@ -418,4 +432,57 @@ def run_stage2_finetune(
         json.dumps(result, indent=2),
         encoding="utf-8",
     )
+    return result
+
+
+def run_stage2_finetune(
+    config: dict[str, Any],
+    *,
+    train_examples: list[Any],
+    val_examples: list[Any],
+    output_dir: Path | None = None,
+    resume_from: Path | None = None,
+    model_cache_dir: str | None = None,
+    tracking: MLflowConfig | None = None,
+) -> dict[str, Any]:
+    """Run GPU fine-tuning with optional aggregate-only MLflow tracking."""
+    with track_experiment(
+        tracking, kind="stage2-training", repository=Path(__file__).resolve().parents[1]
+    ) as experiment:
+        parameters = {
+            key: config.get(key, default)
+            for key, default in {
+                "seed": 42,
+                "epochs": 3,
+                "batch_size": 2,
+                "learning_rate": 2e-5,
+                "weight_decay": 0.01,
+                "temperature": 0.07,
+            }.items()
+        }
+        parameters.update(
+            {"optimizer": "adamw", "objective": "infonce", "resumed": resume_from is not None}
+        )
+        experiment.log_params(parameters)
+        experiment.log_dict(parameters, "config.json")
+        result = _run_stage2_finetune(
+            config,
+            train_examples=train_examples,
+            val_examples=val_examples,
+            output_dir=output_dir,
+            resume_from=resume_from,
+            model_cache_dir=model_cache_dir,
+            experiment=experiment,
+        )
+        experiment.log_metrics(
+            {
+                "train.elapsed_seconds": result["elapsed_seconds"],
+                "train.peak_gpu_memory_mib": result["peak_gpu_memory_mib"],
+            }
+        )
+        experiment.log_params({"artifact_sha256": result["artifact_sha256"]})
+        experiment.log_dict(
+            {"history": result["history"], "artifact_sha256": result["artifact_sha256"]},
+            "training.json",
+        )
     return result

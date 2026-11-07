@@ -48,7 +48,18 @@ python evaluation/run_baseline_eval.py \
 ```
 
 The harness only *measures* analyzers. It never edits target repositories and
-performs no network access.
+performs no network access by default. Optional MLflow tracking records the
+measured ranking metrics, diagnosis timings, benchmark digest and code revision:
+
+```bash
+make tracking-install
+make eval-track
+make mlflow-ui
+```
+
+See [development experiment tracking](../docs/experiment-tracking.md) for the
+local UI, run comparison, optional shared servers and limitations of the seed
+benchmark.
 
 ## Metrics reported
 

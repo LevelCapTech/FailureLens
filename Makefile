@@ -5,8 +5,11 @@
 
 PY ?= python
 PKG := packages/python
+MLFLOW_PORT ?= 5000
+MLFLOW_DIR := $(CURDIR)/.mlflow
+MLFLOW_LOCAL_URI := sqlite:///$(MLFLOW_DIR)/mlflow.db
 
-.PHONY: help install lint format format-check typecheck test coverage build check demo clean
+.PHONY: help install lint format format-check typecheck test coverage build check demo clean tracking-install mlflow-ui eval-track train-smoke-track
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -43,6 +46,22 @@ demo: ## Run the baseline on the bundled example fixture
 		--repo examples/fixtures/sample_project \
 		--log examples/fixtures/sample_project/failure.log \
 		--top 5
+
+tracking-install: ## Install dev tooling and optional MLflow tracking (no ML stack)
+	$(PY) -m pip install -e "$(PKG)[dev,tracking]"
+
+mlflow-ui: ## Serve local experiment history at http://127.0.0.1:5000
+	mkdir -p "$(MLFLOW_DIR)/artifacts"
+	MLFLOW_DISABLE_TELEMETRY=true $(PY) -m mlflow server \
+		--backend-store-uri "$(MLFLOW_LOCAL_URI)" \
+		--default-artifact-root "$(MLFLOW_DIR)/artifacts" \
+		--no-serve-artifacts --host 127.0.0.1 --port $(MLFLOW_PORT)
+
+eval-track: ## Evaluate the bundled baseline and record metrics in MLflow
+	$(PY) evaluation/run_baseline_eval.py --mlflow
+
+train-smoke-track: ## Run the CPU toy training loop and track its learning curve
+	$(PY) -m training.scripts.smoke_train --mlflow
 
 clean: ## Remove build artifacts and caches
 	rm -rf dist build $(PKG)/dist $(PKG)/build
