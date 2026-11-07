@@ -293,6 +293,11 @@ def _run_stage2_finetune(
     weight_decay: float = config.get("weight_decay", 0.01)
     epochs: int = config.get("epochs", 3)
     batch_size: int = config.get("batch_size", 2)
+    # Memory-only knob: the loss is per triplet, so accumulating gradients over
+    # micro-batches is mathematically identical to one full batch.
+    micro_batch_size: int = int(config.get("micro_batch_size") or batch_size)
+    if micro_batch_size < 1:
+        raise ValueError("micro_batch_size must be >= 1")
     temperature: float = config.get("temperature", 0.07)
 
     optimizer = torch.optim.AdamW(
@@ -345,17 +350,20 @@ def _run_stage2_finetune(
 
         for i in range(0, len(train_examples), batch_size):
             batch = train_examples[i : i + batch_size]
-            q_emb = _encode_batch(model, [ex.query for ex in batch], device)
-            p_emb = _encode_batch(model, [ex.positive for ex in batch], device)
-            n_emb = _encode_batch(model, [ex.negative for ex in batch], device)
-
-            loss = _infonce_loss(q_emb, p_emb, n_emb, temperature=temperature)
             optimizer.zero_grad()
-            loss.backward()
+            batch_loss = 0.0
+            for j in range(0, len(batch), micro_batch_size):
+                chunk = batch[j : j + micro_batch_size]
+                q_emb = _encode_batch(model, [ex.query for ex in chunk], device)
+                p_emb = _encode_batch(model, [ex.positive for ex in chunk], device)
+                n_emb = _encode_batch(model, [ex.negative for ex in chunk], device)
+                chunk_loss = _infonce_loss(q_emb, p_emb, n_emb, temperature=temperature)
+                (chunk_loss * (len(chunk) / len(batch))).backward()
+                batch_loss += chunk_loss.item() * (len(chunk) / len(batch))
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
-            epoch_loss += loss.item()
+            epoch_loss += batch_loss
             n_batches += 1
 
         scheduler.step()
@@ -368,10 +376,13 @@ def _run_stage2_finetune(
             n_val_batches = 0
             for i in range(0, len(val_examples), batch_size):
                 batch = val_examples[i : i + batch_size]
-                q_emb = _encode_batch(model, [ex.query for ex in batch], device)
-                p_emb = _encode_batch(model, [ex.positive for ex in batch], device)
-                n_emb = _encode_batch(model, [ex.negative for ex in batch], device)
-                val_loss += _infonce_loss(q_emb, p_emb, n_emb, temperature=temperature).item()
+                for j in range(0, len(batch), micro_batch_size):
+                    chunk = batch[j : j + micro_batch_size]
+                    q_emb = _encode_batch(model, [ex.query for ex in chunk], device)
+                    p_emb = _encode_batch(model, [ex.positive for ex in chunk], device)
+                    n_emb = _encode_batch(model, [ex.negative for ex in chunk], device)
+                    chunk_loss = _infonce_loss(q_emb, p_emb, n_emb, temperature=temperature)
+                    val_loss += chunk_loss.item() * (len(chunk) / len(batch))
                 n_val_batches += 1
             avg_val = val_loss / max(1, n_val_batches)
             history["val_loss"].append(avg_val)
