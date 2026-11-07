@@ -94,7 +94,7 @@ def test_end_to_end_is_aggregate_only_and_owner_only(
     )
 
     assert code == 0
-    (report_path,) = (tmp_path / "out").glob("dev-synthetic-v1-*.json")
+    (report_path,) = (tmp_path / "out").glob("dev-product-synthetic-v1-*.json")
     assert stat.S_IMODE(report_path.stat().st_mode) == 0o600
     report = json.loads(report_path.read_text())
     assert report["mode"] == "dev" and report["gate_c_decision"] is None
@@ -145,3 +145,19 @@ def test_hardware_token_is_allowlist_safe() -> None:
     token = run_gate_c.hardware_token("cpu")
     assert token and len(token) <= 80
     assert all(c.isalnum() or c in "_.+-" for c in token)
+
+
+def test_supplied_pool_mode_uses_labeled_pools_and_names_comparator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _fixture(tmp_path / "fx")
+    weights, digest = _artifact(tmp_path)
+    monkeypatch.setattr(run_gate_c, "make_candidate_factory", _fake_factory)
+    monkeypatch.setattr(run_gate_c, "_git_head", lambda: ("c" * 40, False))
+    argv = [*_args(tmp_path, weights, digest, paths), "--pool", "supplied"]
+    assert run_gate_c.main(argv) == 0
+    (report_path,) = (tmp_path / "out").glob("dev-supplied-*.json")
+    report = json.loads(report_path.read_text())
+    assert report["pool"] == "supplied"
+    assert report["methods"]["baseline"]["name"] == "supplied-pool-stack-lexical"
+    assert report["counts"]["retrieval_abstentions"] == 0

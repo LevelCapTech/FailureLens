@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from evaluation.independent_runner import MethodSpec, run_independent
-from evaluation.private_adapter import PrivateInputError
+from evaluation.private_adapter import PrivateInputError, load_private_cases
 from evaluation.product_pool import load_product_cases
 from evaluation.v3_bridge import (
     MODEL_ID,
@@ -220,15 +220,32 @@ def run_measurement(args: argparse.Namespace, hook: RecordHook | None = None) ->
     if dirty and not args.allow_dirty:
         _reject("uncommitted code changes; commit or pass --allow-dirty")
     spec, train_digest = verify_candidate(args.model_artifact, args.model_sha256, args.train_sha256)
-    cases, baseline = load_product_cases(
-        args.records,
-        args.records_sha256,
-        args.source_manifest,
-        args.train_manifest,
-        args.tree_manifest,
-        top_k=args.top_k,
-        production=not args.dev,
-    )
+    baseline_kwargs: dict[str, Any] = {}
+    if args.pool == "product":
+        cases, baseline = load_product_cases(
+            args.records,
+            args.records_sha256,
+            args.source_manifest,
+            args.train_manifest,
+            args.tree_manifest,
+            top_k=args.top_k,
+            production=not args.dev,
+        )
+        baseline_kwargs = {
+            "baseline": baseline,
+            "baseline_spec": MethodSpec("shipped-baseline-stacktrace-lexical", "product-v1", 0, 0),
+        }
+    else:
+        # Labeled candidate pools; comparator is the supplied-pool lexical adapter,
+        # which is NOT the shipped analyzer. Not eligible for a shipped-baseline delta.
+        cases = load_private_cases(
+            args.records,
+            args.records_sha256,
+            args.source_manifest,
+            args.train_manifest,
+            top_k=args.top_k,
+            production=not args.dev,
+        )
     factory = make_candidate_factory(
         args.model_artifact, args.model_sha256, args.cache_folder, args.device
     )
@@ -245,12 +262,12 @@ def run_measurement(args: argparse.Namespace, hook: RecordHook | None = None) ->
     report = run_independent(
         cases,
         factory,
-        baseline=baseline,
-        baseline_spec=MethodSpec("shipped-baseline-stacktrace-lexical", "product-v1", 0, 0),
         model_spec=spec,
         metadata=metadata,
+        **baseline_kwargs,
     )
     report["version_label"] = label
+    report["pool"] = args.pool
     report["mode"] = "dev" if args.dev else "gate-c-measurement"
     report["environment"] = environment_versions()
     report["code_dirty"] = dirty
@@ -263,7 +280,9 @@ def run_measurement(args: argparse.Namespace, hook: RecordHook | None = None) ->
 def write_report(report: dict[str, Any], out_dir: Path) -> Path:
     """Write the aggregate report with owner-only permissions (private directory)."""
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    name = f"{report['mode']}-{report['version_label']}-{report['generated_at']}.json"
+    name = (
+        f"{report['mode']}-{report['pool']}-{report['version_label']}-{report['generated_at']}.json"
+    )
     target = out_dir / name.replace(":", "")
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -281,7 +300,7 @@ def summarize(report: dict[str, Any]) -> str:
     counts, summary = report["counts"], report["summary"]
     intervals, comparison = report["intervals"], report["threshold_comparison"]
     lines = [
-        f"version: {report['version_label']}  mode: {report['mode']}",
+        f"version: {report['version_label']}  mode: {report['mode']}  pool: {report['pool']}",
         f"cases: {counts['cases']}  repositories: {counts['repositories']}  "
         f"function-labeled: {counts['function_labeled']}",
         f"pool: abstentions={counts['retrieval_abstentions']}  "
@@ -313,7 +332,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--records-sha256", required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--train-manifest", type=Path, required=True)
-    parser.add_argument("--tree-manifest", type=Path, required=True)
+    parser.add_argument(
+        "--tree-manifest",
+        type=Path,
+        required=True,
+        help="failing-tree manifest (read only for --pool product)",
+    )
+    parser.add_argument(
+        "--pool",
+        choices=("product", "supplied"),
+        default="product",
+        help="product: shipped-baseline retrieval; supplied: labeled candidate pools",
+    )
     parser.add_argument("--model-artifact", type=Path, required=True)
     parser.add_argument("--model-sha256", required=True)
     parser.add_argument("--train-sha256", help="expected training dataset digest")
