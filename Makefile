@@ -9,7 +9,7 @@ MLFLOW_PORT ?= 5000
 MLFLOW_DIR := $(CURDIR)/.mlflow
 MLFLOW_LOCAL_URI := sqlite:///$(MLFLOW_DIR)/mlflow.db
 
-.PHONY: help install lint format format-check typecheck test coverage build check demo clean tracking-install mlflow-ui eval-track train-smoke-track
+.PHONY: help install lint format format-check typecheck test coverage build check demo clean tracking-install mlflow-ui eval-track train-smoke-track compare notify-test
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -62,6 +62,12 @@ eval-track: ## Evaluate the bundled baseline and record metrics in MLflow
 
 train-smoke-track: ## Run the CPU toy training loop and track its learning curve
 	$(PY) -m training.scripts.smoke_train --mlflow
+
+compare: ## Render version comparison graphs to .mlflow/reports/ (open index.html)
+	$(PY) -m training.scripts.mlflow_compare
+
+notify-test: ## Send one test notification through the configured channels
+	$(PY) -m failurelens.notify test
 
 clean: ## Remove build artifacts and caches
 	rm -rf dist build $(PKG)/dist $(PKG)/build

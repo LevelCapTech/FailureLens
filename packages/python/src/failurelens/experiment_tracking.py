@@ -10,7 +10,7 @@ import os
 import platform
 import subprocess
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -19,6 +19,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from failurelens.errors import MissingDependencyError
+
+MODEL_VERSION_PATTERN = r"^v\d+\.\d+\.\d+(-[A-Za-z0-9.]+)*$"
+"""Model release labels such as ``v0.1.0`` or ``v0.2.0-candidate-1``."""
 
 
 class MLflowConfig(BaseModel):
@@ -29,6 +32,7 @@ class MLflowConfig(BaseModel):
     tracking_uri: str | None = None
     experiment_name: str | None = Field(default=None, min_length=1)
     run_name: str | None = Field(default=None, min_length=1)
+    model_version: str | None = Field(default=None, pattern=MODEL_VERSION_PATTERN)
 
 
 def add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
@@ -40,6 +44,10 @@ def add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument("--mlflow-experiment", help="Override MLFLOW_EXPERIMENT_NAME.")
     group.add_argument("--mlflow-run-name", help="Optional display name for this run.")
+    group.add_argument(
+        "--model-version",
+        help="Model version label (for example v0.2.0-candidate-1) used to compare versions.",
+    )
 
 
 def tracking_from_args(
@@ -47,13 +55,19 @@ def tracking_from_args(
 ) -> MLflowConfig | None:
     """Require explicit opt-in even when MLflow environment variables are set."""
     if not args.mlflow:
-        if args.mlflow_tracking_uri or args.mlflow_experiment or args.mlflow_run_name:
+        if (
+            args.mlflow_tracking_uri
+            or args.mlflow_experiment
+            or args.mlflow_run_name
+            or args.model_version
+        ):
             parser.error("MLflow options require --mlflow")
         return None
     return MLflowConfig(
         tracking_uri=args.mlflow_tracking_uri,
         experiment_name=args.mlflow_experiment,
         run_name=args.mlflow_run_name,
+        model_version=args.model_version,
     )
 
 
@@ -90,6 +104,46 @@ def _environment() -> dict[str, Any]:
     }
 
 
+def training_diagnostics(
+    train_loss: Sequence[float], validation_loss: Sequence[float]
+) -> dict[str, float]:
+    """Summarise train/validation curves; epochs are 1-based.
+
+    ``diag.overfit_signal`` is 1.0 only when validation loss is worse than its
+    best epoch while training loss kept improving after that epoch. It is a
+    heuristic warning for the loss curves, not proof of overfitting: with few
+    epochs and few examples the curves are noisy. ``diag.gap_trend`` is the
+    least-squares slope of (validation - train) per epoch; positive means the
+    gap is widening.
+    """
+    if len(train_loss) != len(validation_loss) or not train_loss:
+        raise ValueError("training and validation histories must be non-empty and equal length")
+    values = [*train_loss, *validation_loss]
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("training diagnostics require finite losses")
+    count = len(train_loss)
+    best_index = min(range(count), key=lambda i: validation_loss[i])
+    gaps = [validation_loss[i] - train_loss[i] for i in range(count)]
+    if count > 1:
+        mean_x = (count - 1) / 2
+        mean_gap = sum(gaps) / count
+        slope = sum((i - mean_x) * (gaps[i] - mean_gap) for i in range(count)) / sum(
+            (i - mean_x) ** 2 for i in range(count)
+        )
+    else:
+        slope = 0.0
+    since_best = count - 1 - best_index
+    worse_after_best = since_best > 0 and train_loss[-1] < train_loss[best_index]
+    return {
+        "diag.best_epoch": float(best_index + 1),
+        "diag.best_validation_loss": float(validation_loss[best_index]),
+        "diag.epochs_since_best": float(since_best),
+        "diag.final_gap": float(gaps[-1]),
+        "diag.gap_trend": float(slope),
+        "diag.overfit_signal": 1.0 if worse_after_best else 0.0,
+    }
+
+
 class ExperimentRun:
     """Small explicit-run adapter; never changes MLflow's global active run."""
 
@@ -97,6 +151,7 @@ class ExperimentRun:
         self._client = client
         self._entities = entities
         self.run_id = run_id
+        self.store_uri: str | None = None
 
     def log_params(self, params: Mapping[str, Any]) -> None:
         if self._client is not None:
@@ -120,6 +175,31 @@ class ExperimentRun:
             ]
             if values:
                 self._client.log_batch(self.run_id, metrics=values, synchronous=True)
+
+    def log_epoch(
+        self,
+        epoch: int,
+        *,
+        train_loss: float,
+        validation_loss: float,
+        learning_rate: float | None = None,
+    ) -> None:
+        """Record one epoch so versions can be graphed against each other."""
+        metrics = {
+            "train.loss": train_loss,
+            "validation.loss": validation_loss,
+            "train.val_gap": validation_loss - train_loss,
+        }
+        if learning_rate is not None:
+            metrics["train.learning_rate"] = learning_rate
+        self.log_metrics(metrics, step=epoch)
+
+    def log_training_summary(
+        self, train_loss: Sequence[float], validation_loss: Sequence[float]
+    ) -> None:
+        """Record epoch counts and the overfitting indicators for a finished curve."""
+        self.log_params({"epochs_completed": len(train_loss)})
+        self.log_metrics(training_diagnostics(train_loss, validation_loss))
 
     def log_dict(self, data: Mapping[str, Any], filename: str) -> None:
         if self._client is not None:
@@ -181,10 +261,15 @@ def track_experiment(
     }
     if historical:
         tags["failurelens.historical"] = "true"
+    if config.model_version:
+        tags["model.version"] = config.model_version
     run = client.create_run(experiment_id, tags=tags, run_name=config.run_name)
     tracker = ExperimentRun(client, run.info.run_id, entities)
+    tracker.store_uri = uri
     started = time.perf_counter()
     try:
+        if config.model_version:
+            tracker.log_params({"model.version": config.model_version})
         tracker.log_dict(
             _environment(), "import_environment.json" if historical else "environment.json"
         )

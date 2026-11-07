@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from failurelens.experiment_tracking import ExperimentRun, MLflowConfig, track_experiment
+from failurelens.tracking_registry import register_model_version
 
 _MODEL_ID = "nomic-ai/CodeRankEmbed"
 _REVISION = "3c4b60807d71f79b43f3c4363786d9493691f8b1"
@@ -375,13 +376,11 @@ def _run_stage2_finetune(
             avg_val = val_loss / max(1, n_val_batches)
             history["val_loss"].append(avg_val)
 
-        experiment.log_metrics(
-            {
-                "train.loss": avg_train,
-                "validation.loss": avg_val,
-                "train.learning_rate": scheduler.get_last_lr()[0],
-            },
-            step=epoch,
+        experiment.log_epoch(
+            epoch,
+            train_loss=avg_train,
+            validation_loss=avg_val,
+            learning_rate=scheduler.get_last_lr()[0],
         )
 
         ckpt_dir = output_root / f"checkpoint_epoch_{epoch}"
@@ -480,9 +479,25 @@ def run_stage2_finetune(
                 "train.peak_gpu_memory_mib": result["peak_gpu_memory_mib"],
             }
         )
-        experiment.log_params({"artifact_sha256": result["artifact_sha256"]})
+        experiment.log_params(
+            {"artifact_sha256": result["artifact_sha256"], "epochs_total": parameters["epochs"]}
+        )
+        experiment.log_training_summary(
+            result["history"]["train_loss"], result["history"]["val_loss"]
+        )
         experiment.log_dict(
             {"history": result["history"], "artifact_sha256": result["artifact_sha256"]},
             "training.json",
         )
+        if tracking is not None and tracking.model_version and experiment.run_id:
+            version = register_model_version(
+                run_id=experiment.run_id,
+                model_version=tracking.model_version,
+                source_commit=result["git_sha"],
+                weight_sha256=result["artifact_sha256"],
+                weights_path=Path(result["artifact_path"]),
+                tracking_uri=experiment.store_uri,
+                repository=Path(__file__).resolve().parents[1],
+            )
+            result["registered_model_version"] = version
     return result

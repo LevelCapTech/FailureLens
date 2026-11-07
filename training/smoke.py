@@ -149,7 +149,10 @@ def _run_toy_training(
             encoder.apply_gradients(gradients, config_value.learning_rate)
             epoch_loss += loss
         history.append(epoch_loss / max(1, len(examples)))
-        experiment.log_metrics({"train.loss": history[-1]}, step=epoch)
+        experiment.log_metrics(
+            {"train.loss": history[-1], "train.learning_rate": config_value.learning_rate},
+            step=epoch,
+        )
         _save_checkpoint(
             _checkpoint_file(output_root, epoch),
             epoch=epoch,
@@ -201,6 +204,7 @@ def run_toy_training(
                 "resumed": resume_from is not None,
             }
         )
+        parameters["epochs_total"] = config_value.epochs
         experiment.log_params(parameters)
         experiment.log_dict(parameters, "config.json")
         artifact = _run_toy_training(

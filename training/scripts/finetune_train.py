@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 from failurelens.experiment_tracking import add_tracking_arguments, tracking_from_args
+from failurelens.notify import RunNotifier, notify_run
 
 
 def _parse_args() -> argparse.Namespace:
@@ -70,6 +71,12 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    run_name = args.tracking.run_name if args.tracking is not None else None
+    with notify_run("stage2-training", run_name) as notifier:
+        _run(args, notifier)
+
+
+def _run(args: argparse.Namespace, notifier: RunNotifier) -> None:
 
     config_path = Path(args.config)
     if not config_path.exists():
@@ -111,6 +118,16 @@ def main() -> None:
         resume_from=resume_from,
         model_cache_dir=args.model_cache_dir,
         tracking=args.tracking,
+    )
+
+    history = result["history"]
+    notifier.set_metrics(
+        {
+            "train.loss": history["train_loss"][-1],
+            "validation.loss": history["val_loss"][-1],
+            "train.elapsed_seconds": result["elapsed_seconds"],
+            "train.peak_gpu_memory_mib": result["peak_gpu_memory_mib"],
+        }
     )
 
     print("\n=== Experiment complete ===")

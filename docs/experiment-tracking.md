@@ -59,6 +59,11 @@ and `stage2-training`. Use these columns/charts:
 | `file_level.num_cases`, `function_level.num_cases` | Actual denominators; function metrics require function labels. |
 | `performance.diagnosis_mean_ms`, `performance.diagnosis_max_ms` | Wall time per case, including indexing and ranking, excluding MLflow logging. |
 | `train.loss`, `validation.loss` | Loss curves by epoch; validation loss exists only for Stage 2. |
+| `train.val_gap` | Validation minus training loss per epoch. Near zero is healthy; rising suggests overfitting. |
+| `train.learning_rate` | Learning rate after each epoch (measured for new runs; derived from the known cosine schedule for imported history, marked in its parameters). |
+| `diag.*` | Overfitting indicators, see below. |
+| `model.version` (tag and parameter) | Release label such as `v0.2.0-candidate-1`; set with `--model-version`. |
+| `dataset_sha256` | Identity of the evaluation or training data. |
 | `train.peak_gpu_memory_mib`, `train.elapsed_seconds` | GPU training resource measurements. |
 | `benchmark_sha256`, `dataset_sha256` | Input identity for comparable experiments. |
 | `mlflow.source.git.commit`, `failurelens.git_dirty` | Code revision and whether uncommitted changes were present. |
@@ -93,7 +98,8 @@ size rather than claiming to implement all settings in its experimental config.
 Stage 2 records its effective optimizer settings, pinned model identity, dataset
 digest, example/parameter counts and GPU metadata. Both save a filtered
 `config.json` and aggregate `training.json`. They never upload dataset records,
-queries, source code, private file paths, checkpoints or model weights.
+queries, source code or private file paths. Model weights are never sent to a
+remote store; see [Model Registry](#model-registry-and-comparing-versions).
 
 `--resume-from` starts a **new** MLflow run with `resumed=true` and `resume_epoch`.
 New losses retain their actual epoch numbers. Previous epoch losses remain in
@@ -107,6 +113,66 @@ experiment rather than silently losing measurements. If it prevents recording
 the failure status, the original experiment exception is preserved and a warning
 is emitted. Failures before a run can be created cannot be stored in MLflow.
 
+## Model Registry and comparing versions
+
+Give a run a release label with `--model-version` (`v0.1.0`, `v0.2.0-candidate-1`; the
+`v` and three numbers are required). Stage 2 training and `import_history` then
+register a version of the MLflow registered model `failurelens`. Each registry
+version carries the tags `failurelens.version`, `source_commit`, `weight_sha256`,
+`evaluation_status` (starts as `not evaluated`; other values are `gate-c-pending`,
+`evaluated-development`, `gate-c-evaluated`), `status` (`experimental` or
+`tainted-do-not-use`), `historical` and `weights_in_store`.
+
+Add measured aggregate scores later to the **same** version:
+
+```python
+from failurelens.tracking_registry import record_evaluation
+
+record_evaluation(
+    "v0.2.0-candidate-1", {"function_level.mrr": 0.55, "function_level.top_1_accuracy": 0.41}
+)
+```
+
+They become `eval.<name>` tags on the version and `eval.<name>` metrics on its training run.
+Only finite numbers with simple names are accepted. The status defaults to
+`evaluated-development`; `gate-c-evaluated` is reserved for an approved independent
+evaluation, and recording scores is not itself a Gate C decision.
+
+**Weights.** When the tracking store is local (SQLite or file backend with file
+artifacts), a trained checkpoint is copied into that store as the version's artifact so
+the version is self-contained. For a remote or non-file store (an HTTP server, cloud
+storage) weights are **never uploaded**; only the SHA-256 and a hash of the local path
+are recorded in `model_metadata/weights.json`. `import_history` has no weights to copy
+and records the digest only.
+
+**Overfitting indicators** (`diag.*`, from the epoch curves; epochs are 1-based):
+
+| Metric | Meaning |
+| --- | --- |
+| `diag.best_epoch`, `diag.best_validation_loss` | Epoch with the lowest validation loss. |
+| `diag.epochs_since_best` | Epochs after that best one. |
+| `diag.final_gap` | Validation minus training loss at the last epoch. |
+| `diag.gap_trend` | Least-squares slope of the gap per epoch; positive means widening. |
+| `diag.overfit_signal` | 1.0 only if validation is worse than its best while training loss kept improving. A heuristic warning, not proof: curves from few epochs and few examples are noisy. |
+
+**Compare versions in graphs.**
+
+```bash
+make compare                 # writes .mlflow/reports/index.html and four PNG graphs
+```
+
+`index.html` explains the graphs in plain words and lists each version with its final
+losses, best epoch, overfitting signal, evaluation scores and evaluation status
+(`not evaluated` until real scores exist). Tainted versions are hidden; add
+`--include-tainted` to show them. In the MLflow UI (`make mlflow-ui`) you can also open
+**Models**, select `failurelens`, and compare versions; for run-level curves select
+several runs in the `failurelens-development` runs table, press **Compare**, and choose
+the line chart for `train.loss`, `validation.loss`, `train.val_gap` or
+`train.learning_rate`. Filter by `tags.model.version` to see one version.
+
+Training runs, evaluations and history imports also send a start/finish/fail
+notification; see [notifications](notifications.md) for the one-time setup.
+
 ## Import existing Stage 2 training records
 
 Earlier experiments were recorded as JSON before MLflow was introduced. Their
@@ -117,6 +183,9 @@ from the cloud release, without retraining or transferring model weights:
 ```bash
 python -m training.scripts.import_history /path/to/experiment_metadata.json \
   --mlflow --mlflow-run-name historical-stage2
+
+# Also register it as a model version (no weights are copied), for example:
+#   --model-version v0.1.0 [--status tainted-do-not-use]
 ```
 
 The new run contains the original epoch-wise `train.loss` and `validation.loss`,
