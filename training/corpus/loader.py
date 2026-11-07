@@ -24,6 +24,7 @@ from training.corpus.repos import HOLDOUT_REPOSITORIES, get_repo
 from training.data_stage2 import Stage2Example
 
 DEFAULT_CORPUS_ROOT: Path = Path.home() / ".local/share/failurelens/v02-corpus"
+DEFAULT_V03_CORPUS_ROOT: Path = Path.home() / ".local/share/failurelens/v03-corpus"
 PLACEHOLDER_DIGEST = "PENDING_CORPUS_BUILD"
 
 
@@ -135,13 +136,18 @@ def _examples(root: Path, split_dir: str, split: str, dataset_version: str) -> l
 
 
 def load_v02_examples(
-    root: Path | None = None, *, expected_sha256: str
+    root: Path | None = None, *, expected_sha256: str, version: str = "v02"
 ) -> tuple[list[Stage2Example], list[Stage2Example]]:
-    """Return ``(train_examples, val_examples)`` for the digest-pinned v0.2 corpus."""
-    base = root if root is not None else DEFAULT_CORPUS_ROOT
+    """Return ``(train_examples, val_examples)`` for a digest-pinned private corpus.
+
+    ``version`` selects the corpus family (``"v02"`` or ``"v03"``); both share the same
+    on-disk layout and recipe format.
+    """
+    default = DEFAULT_V03_CORPUS_ROOT if version == "v03" else DEFAULT_CORPUS_ROOT
+    base = root if root is not None else default
     verify_corpus(base, expected_sha256)
-    train = _examples(base, "train", "train", "failurelens-train-v02")
-    val = _examples(base, "dev", "val", "failurelens-dev-v02")
+    train = _examples(base, "train", "train", f"failurelens-train-{version}")
+    val = _examples(base, "dev", "val", f"failurelens-dev-{version}")
     train_repos = {e.source_repository for e in train}
     val_repos = {e.source_repository for e in val}
     if train_repos & val_repos:
@@ -159,3 +165,10 @@ def describe(train: list[Stage2Example], val: list[Stage2Example]) -> dict[str, 
         "train_by_repository": dict(Counter(e.source_repository for e in train)),
         "val_by_repository": dict(Counter(e.source_repository for e in val)),
     }
+
+
+def load_v03_examples(
+    root: Path | None = None, *, expected_sha256: str
+) -> tuple[list[Stage2Example], list[Stage2Example]]:
+    """Return ``(train_examples, val_examples)`` for the digest-pinned v0.3 corpus."""
+    return load_v02_examples(root, expected_sha256=expected_sha256, version="v03")

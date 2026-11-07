@@ -31,6 +31,7 @@ class SourceRepo:
     test_args: tuple[str, ...]  # pytest targets, relative to the repo root
     pythonpath: str  # "." or "src": added to PYTHONPATH when running tests
     license_file: str  # repo-relative license file read at the pin
+    profiles: tuple[str, ...] = ("v02", "v03")  # corpus versions that use this repository
 
     @property
     def url(self) -> str:
@@ -122,6 +123,59 @@ REPOSITORIES: tuple[SourceRepo, ...] = (
         ("tests",),
         "src",
         "LICENSE.txt",
+    ),
+    # v0.3 additions (train). Chosen from repositories whose names start with a-m.
+    SourceRepo(
+        "jawah/charset_normalizer",
+        "charset-normalizer",
+        "7d74fe4a8341ae27a8f42c759793301dbd304e10",
+        "MIT",
+        "train",
+        ("src/charset_normalizer/",),
+        ("src/charset_normalizer/cli/", "src/charset_normalizer/version.py"),
+        ("tests",),
+        "src",
+        "LICENSE",
+        ("v03",),
+    ),
+    SourceRepo(
+        "micheles/decorator",
+        "decorator",
+        "956b6396c7369aab4acc7a44851572fcb92fb34a",
+        "BSD-2-Clause",
+        "train",
+        ("src/decorator.py",),
+        (),
+        ("tests/test.py",),
+        "src",
+        "LICENSE.txt",
+        ("v03",),
+    ),
+    SourceRepo(
+        "executablebooks/mdurl",
+        "mdurl",
+        "524d2edbbcb8bb48301ba716c7482827bcabb281",
+        "MIT",
+        "train",
+        ("src/mdurl/",),
+        (),
+        ("tests",),
+        "src",
+        "LICENSE",
+        ("v03",),
+    ),
+    SourceRepo(
+        "lepture/mistune",
+        "mistune",
+        "f7ec702edfc1ad5579a76f881238841af266d93c",
+        "BSD-3-Clause",
+        "train",
+        ("src/mistune/",),
+        ("src/mistune/__main__.py",),
+        ("tests",),
+        "src",
+        "LICENSE",
+        ("v03",),
     ),
     SourceRepo(
         "andialbrecht/sqlparse",

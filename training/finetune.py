@@ -52,16 +52,24 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def _freeze_all_but_last_encoder_layer(model: Any) -> tuple[int, int]:
-    """Freeze all parameters; unfreeze last NomicBertBlock. Return (trainable, total)."""
+def _freeze_all_but_last_encoder_layer(model: Any, n_layers: int = 1) -> tuple[int, int]:
+    """Freeze all parameters; unfreeze the last ``n_layers`` NomicBertBlocks.
+
+    Returns ``(trainable, total)``. ``n_layers=1`` is the original behaviour.
+    """
+    if n_layers < 1:
+        raise ValueError("trainable_encoder_layers must be >= 1")
     for param in model.parameters():
         param.requires_grad_(False)
 
     # model[0] is the sentence_transformers Transformer wrapper;
     # model[0].model is NomicBertModel; .encoder.layers is the ModuleList
-    last_layer = model[0].model.encoder.layers[-1]
-    for param in last_layer.parameters():
-        param.requires_grad_(True)
+    layers = model[0].model.encoder.layers
+    if n_layers > len(layers):
+        raise ValueError("trainable_encoder_layers exceeds the number of encoder layers")
+    for layer in layers[-n_layers:]:
+        for param in layer.parameters():
+            param.requires_grad_(True)
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
@@ -287,7 +295,9 @@ def _run_stage2_finetune(
     model = encoder_wrapper._model  # type: ignore[attr-defined]  # raw SentenceTransformer
     model.to(device)
 
-    trainable, total = _freeze_all_but_last_encoder_layer(model)
+    trainable, total = _freeze_all_but_last_encoder_layer(
+        model, int(config.get("trainable_encoder_layers", 1))
+    )
 
     lr: float = config.get("learning_rate", 2e-5)
     weight_decay: float = config.get("weight_decay", 0.01)

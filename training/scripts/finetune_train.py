@@ -87,12 +87,14 @@ def _run(args: argparse.Namespace, notifier: RunNotifier) -> None:
 
     data_root = Path(args.data_root) if args.data_root else None
     print("Loading Stage 2 training examples...")
-    if config.get("corpus") == "failurelens-corpus-v02":
-        # v0.2 private corpus: repo-level train/dev split, pinned by combined digest.
+    if config.get("corpus") in {"failurelens-corpus-v02", "failurelens-corpus-v03"}:
+        # Private corpus: repo-level train/dev split, pinned by combined digest.
         from training.corpus.loader import load_v02_examples
 
         train_examples, val_examples = load_v02_examples(
-            data_root, expected_sha256=str(config.get("dataset_sha256", ""))
+            data_root,
+            expected_sha256=str(config.get("dataset_sha256", "")),
+            version="v03" if config["corpus"].endswith("v03") else "v02",
         )
     else:
         from training.data_stage2 import load_stage2_examples
