@@ -227,3 +227,10 @@ models/cache/
 
 # Local Git worktrees
 /.worktrees/
+
+# Local experiment tracking (metadata, artifacts, SQLite sidecars)
+/.mlflow/
+/mlruns/
+/mlartifacts/
+/mlflow.db*
+/training/experiments/toy-smoke/
