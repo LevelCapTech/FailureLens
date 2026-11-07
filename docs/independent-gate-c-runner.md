@@ -17,3 +17,22 @@ The returned report contains aggregate counts, metrics, intervals, budgets, reda
 ## Issue #28 common-pool extension
 
 The opt-in `evaluation/product_pool.py` adapter uses the shipped `FailureLens.from_baseline()` retrieval and passes its exact ordered pool to v3. See `docs/shipped-baseline-common-pool.md`. The default supplied-pool lexical comparator above remains a historical adapter, not the shipped comparator. Empty retrieved pools retain the original case denominator and count as misses for both methods; aggregate counts now include abstention and pool-recall diagnostics.
+
+## Reusable driver (`evaluation/run_gate_c.py`)
+
+`python -m evaluation.run_gate_c` wires the loaders above for one candidate
+artifact: the shipped baseline versus a Stage 2 `model_final.safetensors` on the
+same verified pool, three fixed seeds, aggregate output only. It requires an
+isolated evaluator environment with the `ml` and `train` extras, a local audited
+base-model cache, and caller-pinned digests for the records and the weights.
+The aggregate report is written with owner-only permissions to a private
+directory (default under `~/.local/share/failurelens/`); the console prints
+numbers only. A clean committed code revision is required unless
+`--allow-dirty` is given.
+
+`--model-label` names the version (for example `v0.2-candidate-1`). `--dev`
+relaxes only the 30-case / 3-repository floor for development sets; such
+reports are labelled `dev` and are not Gate C evidence. The driver records no
+Gate C decision. `record_evaluation` is an optional hook that receives only the
+sanitized aggregate report and label; it is a no-op unless a tracking
+integration supplies one.
