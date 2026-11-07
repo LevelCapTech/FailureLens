@@ -129,6 +129,19 @@ make build       # sdistとwheelをビルド
 python evaluation/run_baseline_eval.py   # ベースラインの評価指標を実測
 ```
 
+MLflowで評価指標・診断時間・学習損失を記録し、開発前後の実験を比較できます。
+仮想環境を有効化したうえで、次を実行してください。
+
+```bash
+make tracking-install   # 任意のMLflow依存と開発ツールを追加
+make eval-track         # 同梱ベンチマークの実測を記録
+make train-smoke-track  # CPUの小規模学習の損失を記録
+make mlflow-ui          # http://127.0.0.1:5000 で比較画面を起動
+```
+
+実験履歴はGit管理外の`.mlflow/`に保存します。通常の利用では記録を行いません。
+詳細は[MLflow実験管理ガイド](docs/experiment-tracking.md)を参照してください。
+
 ## コントリビューション
 
 コントリビューションを歓迎します。[CONTRIBUTING.md](CONTRIBUTING.md)と

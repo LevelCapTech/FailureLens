@@ -118,6 +118,12 @@ AGENTS.md          Single source of truth for contributors & AI agents
 
 ## Development
 
+Optional MLflow tracking records evaluation metrics, diagnosis timings and
+training loss curves for comparison across changes. See the
+[experiment tracking guide](docs/experiment-tracking.md), or run
+`make tracking-install`, `make eval-track`, then `make mlflow-ui` in your
+development environment.
+
 ```bash
 make install     # editable install with dev tools
 make check       # ruff lint + format check + mypy (strict) + pytest  (mirrors CI)
