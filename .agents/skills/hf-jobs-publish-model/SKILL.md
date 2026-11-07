@@ -34,6 +34,14 @@ description: Build and publish model weights with Hugging Face Jobs while keepin
 - 説明と使用例が実装に合っている。独立評価の未完了、対応言語、候補取得との境界、未校正スコア、API統合の制約を明記し、ロード成功を精度や優位性の証明にしない。
 - 不要な有料Jobが稼働し続けていないことを確認し、URL、revision、検証結果と残る制約を簡潔に報告する。実費は請求記録なしで断定しない。
 
+## この環境(大容量アップロード禁止の回線)での使い方
+
+- 回線が大容量アップロードを禁じているため、重み・データ・チェックポイントをローカルから`upload_file`/`hf upload`等で送らない。Hubへの登録は`huggingface_hub`のJobs API(`hf jobs`)で、worker側がHub内で取得・生成・アップロードする。ローカルから送るのはworkerスクリプトと小容量の入力だけ。
+- Claude Codeからも`.claude/skills/`経由で使える。`huggingface_hub`はプロジェクトの`.venv`には入っていない。`hf` CLIの専用環境のPythonを使う: `HFPY=$(head -1 ~/.local/bin/hf | sed 's/^#!//')`。そのうえで`$HFPY <skill-dir>/scripts/inspect_release.py ...`や`hf jobs ...`を実行する。`.venv`へ追加インストールしない(コア依存を増やさない)。
+- 認証は既存の`hf auth`のログイン(namespace `LevelCapTech`)を使う。トークン値は表示しない。
+- FailureLensの規約を優先する: 公開、学習の起動、有料Job、新しい非公開データの転送は、人間オーナーの明示承認がある場合だけ実行する。このスキルの呼び出しは承認ではない。承認がなければ、worker・カード・予算案を整えてレビューを求めるところで止める。読み取り専用の確認(`inspect_release.py`、`hf jobs list/inspect`)は承認なしで行える。
+- 公開後は、MLflowへの記録が必要なら`track-experiments-mlflow`スキルに従い、`failurelens_provenance.json`を`import_history`で取り込む。ロード成功を精度や優位性の根拠にしない。
+
 ## 読み取り専用helper
 
 `huggingface_hub`が入ったPythonで、`scripts/inspect_release.py`を使える。

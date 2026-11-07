@@ -1,0 +1,4 @@
+interface:
+  display_name: "MLflowで実験結果を登録"
+  short_description: "評価・学習の結果をMLflowへ記録し、登録状況を確認"
+  default_prompt: "$track-experiments-mlflow を使って、MLflowの登録状況を確認し、今回の評価・学習結果を記録してください。"
