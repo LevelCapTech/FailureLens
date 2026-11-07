@@ -32,3 +32,19 @@ The splits are by repository. **Train and dev share no repository, and neither c
 | `jmespath/jmespath.py` | `2812594e69d43098ef60f81f4efc404c071b0418` | [`LICENSE`](https://github.com/jmespath/jmespath.py/blob/2812594e69d43098ef60f81f4efc404c071b0418/LICENSE), MIT text (blob SHA-256 `6eefacfa4d71b82d...`) | dev | Rights-cleared source; probe validation pending |
 
 These are source candidates, not accepted cases. Records exist only after the target project's own tests pass on the clean tree and fail after one exact single-line mutation, and pass the schema and semantic gates.
+
+
+## Gate C v2 evaluation sources (final-evaluation set; added 2026-11-07)
+
+Sources for a fresh, private final-evaluation set (`docs/gate-c-v2.md`). Each license file was read at the pinned commit and its text classified as MIT by `training/corpus/build.py prepare`. The same conditions as above apply: local synthetic mutation and own-generated logs only, no authorization to redistribute derived records, retain notices on any redistribution, no endorsement.
+
+**These repositories are disjoint from every repository in the first hold-out (`psf/requests`, `pallets/werkzeug`, `pypa/pip`), from all v0.2 train and dev repositories above, from the legacy training repositories (`pallets/click`, `python-attrs/attrs`), and from any repository added to a training manifest.** `training/corpus/gatec_v2.py` fails closed on any overlap and rewrites only the training manifest when the training list changes.
+
+| Source | Pin | License evidence | Split | Status |
+|---|---|---|---|---|
+| `tkem/cachetools` | `1ce79efa552d1bdda70d144d401ef9105d999184` | [`LICENSE`](https://github.com/tkem/cachetools/blob/1ce79efa552d1bdda70d144d401ef9105d999184/LICENSE), MIT text (blob SHA-256 `28c000b52b0ee27138a68ef778227e4057046e86b65f62f1cacb99b0cc49e0d2`) | evaluation | Rights-cleared source |
+| `PyCQA/pycodestyle` | `10a4427c75740717b43448339fcf71f11bc33d1a` | [`LICENSE`](https://github.com/PyCQA/pycodestyle/blob/10a4427c75740717b43448339fcf71f11bc33d1a/LICENSE), MIT (Expat) text (blob SHA-256 `f772295e81af3478d34e88e52d076200230ec7dd6a39e123bc5cb35aa66abdae`) | evaluation | Rights-cleared source |
+| `python-validators/validators` | `e2e49fb3bb4b9f1ce955638386aa167356d24055` | [`LICENSE.txt`](https://github.com/python-validators/validators/blob/e2e49fb3bb4b9f1ce955638386aa167356d24055/LICENSE.txt), MIT text (blob SHA-256 `9567be0573324442d69eaf0b3e1e91c3f05fb4736b3202ab83eadbb4aff2f0b5`) | evaluation | Rights-cleared source |
+| `bottlepy/bottle` | `b0a0a1014f7a7e6f6b7c193886a0913f46ee3ee6` | [`LICENSE`](https://github.com/bottlepy/bottle/blob/b0a0a1014f7a7e6f6b7c193886a0913f46ee3ee6/LICENSE), MIT text (blob SHA-256 `af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443`) | evaluation | Rights-cleared source |
+
+These are source candidates, not accepted cases. Each record needs the project's own tests to pass on the clean tree and fail after one exact edit, plus the schema and semantic gates.

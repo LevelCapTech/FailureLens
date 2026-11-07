@@ -280,6 +280,28 @@ def test_product_function_mapping_fails_closed(tmp_path: Path, function: str) ->
         _product_candidate(output, root, index)
 
 
+def test_repeated_retrieved_name_is_opt_in(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from evaluation.product_pool import _product_candidate
+
+    from failurelens import FailureLens
+
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "mod.py").write_text("def cause():\n    return 1\n\ndef cause():\n    return 2\n")
+    index = FailureLens.from_baseline().index(root)
+    output = SimpleNamespace(file="mod.py", function="cause", start_line=1, end_line=2)
+    with pytest.raises(PrivateInputError, match="function span"):
+        _product_candidate(output, root, index)
+    candidate = _product_candidate(output, root, index, allow_ambiguous_names=True)
+    assert candidate.id == "mod.py::cause:1-2"
+    # the exact (name, start, end) unit must still be present and unique
+    missing = SimpleNamespace(file="mod.py", function="cause", start_line=1, end_line=3)
+    with pytest.raises(PrivateInputError, match="function span"):
+        _product_candidate(missing, root, index, allow_ambiguous_names=True)
+
+
 def test_missing_non_candidate_indexed_file_rejected(tmp_path: Path) -> None:
     paths = _fixture(tmp_path)
     _, _, _, trees, root = paths

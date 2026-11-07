@@ -230,6 +230,7 @@ def run_measurement(args: argparse.Namespace, hook: RecordHook | None = None) ->
             args.tree_manifest,
             top_k=args.top_k,
             production=not args.dev,
+            allow_ambiguous_retrieved_names=args.allow_ambiguous_retrieved_names,
         )
         baseline_kwargs = {
             "baseline": baseline,
@@ -268,6 +269,9 @@ def run_measurement(args: argparse.Namespace, hook: RecordHook | None = None) ->
     )
     report["version_label"] = label
     report["pool"] = args.pool
+    report["allow_ambiguous_retrieved_names"] = bool(
+        args.pool == "product" and args.allow_ambiguous_retrieved_names
+    )
     report["mode"] = "dev" if args.dev else "gate-c-measurement"
     report["environment"] = environment_versions()
     report["code_dirty"] = dirty
@@ -343,6 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("product", "supplied"),
         default="product",
         help="product: shipped-baseline retrieval; supplied: labeled candidate pools",
+    )
+    parser.add_argument(
+        "--allow-ambiguous-retrieved-names",
+        action="store_true",
+        help="product pool only: accept retrieved units whose name repeats in the file "
+        "(positive labels must still be unique); required for real repositories",
     )
     parser.add_argument("--model-artifact", type=Path, required=True)
     parser.add_argument("--model-sha256", required=True)

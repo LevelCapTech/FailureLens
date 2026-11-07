@@ -141,6 +141,18 @@ def test_unsafe_labels_are_rejected(label: str) -> None:
         run_gate_c._label(label)
 
 
+def test_ambiguous_retrieved_names_flag_is_opt_in() -> None:
+    required = [
+        "--records", "r", "--records-sha256", "a", "--source-manifest", "s",
+        "--train-manifest", "t", "--tree-manifest", "m", "--model-artifact", "w",
+        "--model-sha256", "b", "--model-label", "v",
+    ]  # fmt: skip
+    parser = run_gate_c.build_parser()
+    assert parser.parse_args(required).allow_ambiguous_retrieved_names is False
+    flagged = parser.parse_args([*required, "--allow-ambiguous-retrieved-names"])
+    assert flagged.allow_ambiguous_retrieved_names is True
+
+
 def test_hardware_token_is_allowlist_safe() -> None:
     token = run_gate_c.hardware_token("cpu")
     assert token and len(token) <= 80
