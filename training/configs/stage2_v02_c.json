@@ -1,0 +1,18 @@
+{
+  "seed": 42,
+  "epochs": 12,
+  "batch_size": 16,
+  "learning_rate": 0.00001,
+  "weight_decay": 0.01,
+  "temperature": 0.05,
+  "max_length": 512,
+  "optimizer": "adamw",
+  "objective": "infonce",
+  "model_id": "nomic-ai/CodeRankEmbed",
+  "model_revision": "3c4b60807d71f79b43f3c4363786d9493691f8b1",
+  "corpus": "failurelens-corpus-v02",
+  "dataset": "failurelens-train-v02+failurelens-dev-v02",
+  "dataset_sha256": "PENDING_CORPUS_BUILD",
+  "split": "repo-level-train-dev",
+  "trainable_layers": "last-encoder-layer"
+}

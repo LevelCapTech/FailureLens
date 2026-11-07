@@ -78,11 +78,19 @@ def main() -> None:
 
     config: dict = json.loads(config_path.read_text(encoding="utf-8"))
 
-    from training.data_stage2 import load_stage2_examples
-
     data_root = Path(args.data_root) if args.data_root else None
     print("Loading Stage 2 training examples...")
-    train_examples, val_examples = load_stage2_examples(data_root)
+    if config.get("corpus") == "failurelens-corpus-v02":
+        # v0.2 private corpus: repo-level train/dev split, pinned by combined digest.
+        from training.corpus.loader import load_v02_examples
+
+        train_examples, val_examples = load_v02_examples(
+            data_root, expected_sha256=str(config.get("dataset_sha256", ""))
+        )
+    else:
+        from training.data_stage2 import load_stage2_examples
+
+        train_examples, val_examples = load_stage2_examples(data_root)
     print(f"  train={len(train_examples)} val={len(val_examples)}")
 
     # Brief content reconstruction report (aggregate, no individual labels)
