@@ -12,7 +12,7 @@
   "model_revision": "3c4b60807d71f79b43f3c4363786d9493691f8b1",
   "corpus": "failurelens-corpus-v03",
   "dataset": "failurelens-train-v03+failurelens-dev-v03",
-  "dataset_sha256": "PENDING_CORPUS_BUILD",
+  "dataset_sha256": "048301aea2e8eb6918b252416cea431b1c73505034d9f14952b2f4b69974417e",
   "split": "repo-level-train-dev",
   "trainable_layers": "last-2-encoder-layers",
   "trainable_encoder_layers": 2,
