@@ -1,14 +1,15 @@
-"""Single-line source mutations for the synthetic fault corpus (v0.2).
+"""Source mutations for the synthetic fault corpus (v0.2 base, v0.3 hard kinds).
 
 Pure and offline: given the text of a Python module, enumerate candidate
-single-line mutations of module-level functions. Nothing here executes code.
+mutations of module-level functions. Nothing here executes code.
 
 Every mutation is expressed as an exact textual recipe ``(old, new)`` that is
 compatible with ``evaluation.product_pool.verify_failing_tree``: ``old`` is a
-complete source line that occurs exactly once inside the function text, and
-``new`` is its replacement (one line for in-place edits, two lines for
-inserted statements). Either shape moves a function's recorded line span by at
-most one line, which ``evaluation.private_adapter`` accepts.
+run of complete source lines (one line for the v0.2 kinds, several consecutive
+lines for some v0.3 hard kinds) that occurs exactly once inside the function
+text, and ``new`` is its replacement. The net line change is always 0 (in
+place) or +1 (inserted statement), which moves a function's recorded line span
+by at most one line, as ``evaluation.private_adapter`` requires.
 """
 
 from __future__ import annotations
@@ -18,6 +19,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 __all__ = [
+    "ALL_KINDS",
+    "BASE_KINDS",
+    "HARD_KINDS",
     "FunctionInfo",
     "Mutation",
     "apply_mutation",
@@ -36,7 +40,17 @@ KIND_RETURN_VALUE = "wrong-value return"
 KIND_EARLY_RETURN = "early-return None"
 KIND_RAISE = "raised exception"
 
-ALL_KINDS: tuple[str, ...] = (
+#: v0.3 hard kinds. ``KIND_CALLEE`` is not a text shape: the builder assigns it to
+#: a case whose root-cause function does not appear in the failure's stack trace.
+KIND_MULTI = "multi-line edit"
+KIND_SWAP_ARGS = "swapped call arguments"
+KIND_DROP_ARG = "dropped call argument"
+KIND_BOUND = "loop or slice bound off-by-one"
+KIND_DEFAULT = "changed default value"
+KIND_GUARD = "neutralised guard clause"
+KIND_CALLEE = "callee change surfacing elsewhere"
+
+BASE_KINDS: tuple[str, ...] = (
     KIND_COMPARE,
     KIND_BOOLEAN,
     KIND_ARITHMETIC,
@@ -47,6 +61,18 @@ ALL_KINDS: tuple[str, ...] = (
     KIND_EARLY_RETURN,
     KIND_RAISE,
 )
+HARD_KINDS: frozenset[str] = frozenset(
+    {
+        KIND_MULTI,
+        KIND_SWAP_ARGS,
+        KIND_DROP_ARG,
+        KIND_BOUND,
+        KIND_DEFAULT,
+        KIND_GUARD,
+        KIND_CALLEE,
+    }
+)
+ALL_KINDS: tuple[str, ...] = (*BASE_KINDS, *sorted(HARD_KINDS))
 
 _COMPARE_FLIPS: dict[type[ast.cmpop], tuple[str, str]] = {
     ast.Eq: ("==", "!="),
@@ -77,14 +103,18 @@ class Mutation:
 
     function: str
     kind: str
-    line_no: int  # 1-based line of ``old`` in the clean file
-    old: str  # complete clean line, no trailing newline
-    new: str  # replacement text; may contain one newline (inserted statement)
-    in_place: bool  # True: one line replaced; False: one statement inserted
+    line_no: int  # 1-based first line of ``old`` in the clean file
+    old: str  # complete clean line(s) joined by newlines, no trailing newline
+    new: str  # replacement text
+    in_place: bool  # True: net line count unchanged; False: one statement inserted
+
+    @property
+    def old_line_count(self) -> int:
+        return self.old.count("\n") + 1
 
     @property
     def inserted_lines(self) -> int:
-        return 0 if self.in_place else 1
+        return self.new.count("\n") - self.old.count("\n")
 
 
 def _all_function_names(tree: ast.Module) -> dict[str, int]:
@@ -240,12 +270,185 @@ def _inserted_statements(indent: str) -> Iterator[tuple[str, str]]:
     yield KIND_RAISE, f"{indent}raise RuntimeError('unexpected state')"
 
 
-def enumerate_mutations(source: str, info: FunctionInfo) -> list[Mutation]:
-    """All valid, deduplicated, exactly-recorded single edits of ``info``.
+def _splice(
+    node: ast.AST, lines: list[str], replacements: list[tuple[int, int, str]]
+) -> str | None:
+    """Replace byte ranges on the (single) line of ``node``; ranges must not overlap."""
+    lineno = getattr(node, "lineno", 0)
+    if not lineno:
+        return None
+    raw = lines[lineno - 1].encode("utf-8")
+    for begin, end, text in sorted(replacements, reverse=True):
+        raw = raw[:begin] + text.encode("utf-8") + raw[end:]
+    return raw.decode("utf-8")
+
+
+def _parenthesized(node: ast.expr, text: str) -> str:
+    simple = (ast.Name, ast.Attribute, ast.Call, ast.Subscript, ast.Constant)
+    return text if isinstance(node, simple) else f"({text})"
+
+
+def _expr_text(lines: list[str], node: ast.expr) -> str:
+    raw = lines[node.lineno - 1].encode("utf-8")
+    return raw[node.col_offset : node.end_col_offset].decode("utf-8")
+
+
+def _call_edits(lines: list[str], node: ast.Call, lineno: int) -> Iterator[tuple[int, str, str]]:
+    args = node.args
+    plain = not any(isinstance(a, ast.Starred) for a in args) and all(
+        _single_line(a) and a.end_col_offset is not None for a in args
+    )
+    if not plain:
+        return
+    if len(args) >= 2:
+        first, second = args[0], args[1]
+        text_a, text_b = _expr_text(lines, first), _expr_text(lines, second)
+        if text_a != text_b and first.end_col_offset and second.end_col_offset:
+            new = _splice(
+                node,
+                lines,
+                [
+                    (first.col_offset, first.end_col_offset, text_b),
+                    (second.col_offset, second.end_col_offset, text_a),
+                ],
+            )
+            if new:
+                yield lineno, KIND_SWAP_ARGS, new
+        if not node.keywords:
+            prev, last = args[-2], args[-1]
+            if prev.end_col_offset is not None and last.end_col_offset is not None:
+                new = _splice(node, lines, [(prev.end_col_offset, last.end_col_offset, "")])
+                if new:
+                    yield lineno, KIND_DROP_ARG, new
+    if (
+        isinstance(node.func, ast.Name)
+        and node.func.id == "range"
+        and args
+        and not isinstance(args[-1], ast.Constant)
+        and args[-1].end_col_offset is not None
+    ):
+        last = args[-1]
+        text = _parenthesized(last, _expr_text(lines, last))
+        new = _splice(node, lines, [(last.col_offset, last.end_col_offset or 0, f"{text} - 1")])
+        if new:
+            yield lineno, KIND_BOUND, new
+
+
+def _hard_single_line_edits(
+    lines: list[str], func: ast.FunctionDef, info: FunctionInfo
+) -> Iterator[tuple[int, str, str]]:
+    """Yield ``(line_no, kind, new_line)`` for v0.3 in-place, single-line hard edits."""
+    doc_end = _docstring_end(func)
+    for node in ast.walk(func):
+        lineno = getattr(node, "lineno", 0)
+        if lineno <= max(doc_end, info.start_line):
+            continue
+        if isinstance(node, ast.Call) and _single_line(node):
+            yield from _call_edits(lines, node, lineno)
+        elif isinstance(node, ast.Slice) and _single_line(node):
+            for bound, suffix in ((node.upper, " - 1"), (node.lower, " + 1")):
+                if (
+                    bound is not None
+                    and not isinstance(bound, ast.Constant)
+                    and _single_line(bound)
+                    and bound.end_col_offset is not None
+                ):
+                    text = _parenthesized(bound, _expr_text(lines, bound))
+                    new = _splice(
+                        bound, lines, [(bound.col_offset, bound.end_col_offset, f"{text}{suffix}")]
+                    )
+                    if new:
+                        yield bound.lineno, KIND_BOUND, new
+    # Default values live in the ``def`` header, which the walk above does not cover.
+    arguments = func.args
+    defaults = [*arguments.defaults, *[d for d in arguments.kw_defaults if d is not None]]
+    for default in defaults:
+        if not (
+            isinstance(default, ast.Constant)
+            and _single_line(default)
+            and default.end_col_offset is not None
+            and info.start_line <= default.lineno < info.first_stmt_line
+        ):
+            continue
+        value = default.value
+        if isinstance(value, bool):
+            replacement = str(not value)
+        elif isinstance(value, int) and 0 <= value < 1000:
+            replacement = str(value + 1)
+        elif isinstance(value, str) and value:
+            replacement = '""'
+        else:
+            continue
+        new = _splice(default, lines, [(default.col_offset, default.end_col_offset, replacement)])
+        if new:
+            yield default.lineno, KIND_DEFAULT, new
+
+
+def _guard_edits(lines: list[str], func: ast.FunctionDef, info: FunctionInfo) -> Iterator[Mutation]:
+    """``if cond: <raise/return/continue/break>`` with the action replaced by ``pass``."""
+    for node in ast.walk(func):
+        if not isinstance(node, ast.If) or len(node.body) != 1:
+            continue
+        action = node.body[0]
+        if not isinstance(action, (ast.Raise, ast.Return, ast.Continue, ast.Break)):
+            continue
+        if (
+            action.lineno != node.lineno + 1
+            or not _single_line(action)
+            or node.test.end_lineno != node.lineno
+            or node.lineno <= info.start_line
+        ):
+            continue
+        header, body = lines[node.lineno - 1], lines[action.lineno - 1]
+        if not header.rstrip().endswith(":"):
+            continue
+        indent = body[: len(body) - len(body.lstrip())]
+        yield Mutation(
+            info.name,
+            KIND_GUARD,
+            node.lineno,
+            f"{header}\n{body}",
+            f"{header}\n{indent}pass",
+            True,
+        )
+
+
+def _combined_edits(
+    lines: list[str],
+    edits: list[tuple[int, str, str]],
+    info: FunctionInfo,
+    *,
+    max_gap: int = 6,
+    limit: int = 3,
+) -> Iterator[Mutation]:
+    """Two independent in-place edits on nearby lines, recorded as one multi-line recipe."""
+    by_line: dict[int, str] = {}
+    for line_no, _kind, new_line in sorted(edits):
+        by_line.setdefault(line_no, new_line)
+    ordered = sorted(by_line)
+    pairs = [
+        (a, b)
+        for index, a in enumerate(ordered)
+        for b in ordered[index + 1 :]
+        if 0 < b - a <= max_gap
+    ]
+    pairs.sort(key=lambda pair: (pair[1] - pair[0], pair[0]))
+    for a, b in pairs[:limit]:
+        old_lines = lines[a - 1 : b]
+        new_lines = list(old_lines)
+        new_lines[0] = by_line[a]
+        new_lines[-1] = by_line[b]
+        yield Mutation(info.name, KIND_MULTI, a, "\n".join(old_lines), "\n".join(new_lines), True)
+
+
+def enumerate_mutations(source: str, info: FunctionInfo, *, hard: bool = False) -> list[Mutation]:
+    """All valid, deduplicated, exactly-recorded edits of ``info``.
 
     A mutation is kept only if the result still parses, differs from the
     original, and ``old`` appears exactly once in the function's text (the
-    exactness condition required by the failing-tree verifier).
+    exactness condition required by the failing-tree verifier). With
+    ``hard=True`` the v0.3 hard text shapes (see :data:`HARD_KINDS`) are
+    enumerated as well.
     """
     tree = ast.parse(source)
     func = next(
@@ -259,14 +462,17 @@ def enumerate_mutations(source: str, info: FunctionInfo) -> list[Mutation]:
     result: list[Mutation] = []
 
     def accept(mutation: Mutation) -> None:
-        if function_text.count(mutation.old) != 1:
+        if mutation.new == mutation.old or function_text.count(mutation.old) != 1:
+            return
+        if mutation.inserted_lines not in {0, 1}:
             return
         key = (mutation.line_no, mutation.new)
         if key in seen:
             return
         edited = list(lines)
-        replacement = mutation.new.split("\n")
-        edited[mutation.line_no - 1 : mutation.line_no] = replacement
+        edited[mutation.line_no - 1 : mutation.line_no - 1 + mutation.old_line_count] = (
+            mutation.new.split("\n")
+        )
         try:
             ast.parse("\n".join(edited) + "\n")
         except SyntaxError:
@@ -274,7 +480,8 @@ def enumerate_mutations(source: str, info: FunctionInfo) -> list[Mutation]:
         seen.add(key)
         result.append(mutation)
 
-    for line_no, kind, new_line in _candidates_in_function(lines, func, info):
+    base_edits = list(_candidates_in_function(lines, func, info))
+    for line_no, kind, new_line in base_edits:
         old = lines[line_no - 1]
         if new_line != old:
             accept(Mutation(info.name, kind, line_no, old, new_line, True))
@@ -286,13 +493,22 @@ def enumerate_mutations(source: str, info: FunctionInfo) -> list[Mutation]:
         accept(
             Mutation(info.name, kind, info.first_stmt_line, first, f"{statement}\n{first}", False)
         )
+    if hard:
+        for line_no, kind, new_line in _hard_single_line_edits(lines, func, info):
+            accept(Mutation(info.name, kind, line_no, lines[line_no - 1], new_line, True))
+        for mutation in _guard_edits(lines, func, info):
+            accept(mutation)
+        changed = [(n, k, t) for n, k, t in base_edits if t != lines[n - 1]]
+        for mutation in _combined_edits(lines, changed, info):
+            accept(mutation)
     return result
 
 
 def apply_mutation(source: str, mutation: Mutation) -> str:
     """Return ``source`` with ``mutation`` applied (single-edit, trailing newline kept)."""
     lines = source.split("\n")
-    if lines[mutation.line_no - 1] != mutation.old:
+    begin = mutation.line_no - 1
+    if "\n".join(lines[begin : begin + mutation.old_line_count]) != mutation.old:
         raise ValueError("mutation does not match the source line")
-    lines[mutation.line_no - 1 : mutation.line_no] = mutation.new.split("\n")
+    lines[begin : begin + mutation.old_line_count] = mutation.new.split("\n")
     return "\n".join(lines)

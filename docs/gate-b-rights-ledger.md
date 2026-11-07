@@ -48,3 +48,16 @@ Sources for a fresh, private final-evaluation set (`docs/gate-c-v2.md`). Each li
 | `bottlepy/bottle` | `b0a0a1014f7a7e6f6b7c193886a0913f46ee3ee6` | [`LICENSE`](https://github.com/bottlepy/bottle/blob/b0a0a1014f7a7e6f6b7c193886a0913f46ee3ee6/LICENSE), MIT text (blob SHA-256 `af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443`) | evaluation | Rights-cleared source |
 
 These are source candidates, not accepted cases. Each record needs the project's own tests to pass on the clean tree and fail after one exact edit, plus the schema and semantic gates.
+
+## v0.3 corpus sources (train only; added 2026-11-07)
+
+Four more permissively licensed, pure-Python sources for the v0.3 private synthetic corpus (`docs/corpus-v03.md`). They were chosen from repositories whose names start with a-m so that they do not overlap a separately selected evaluation set. As above, each license file was read at the pinned commit and classified by `training/corpus/build.py prepare`, which also checks that the pin is the checked-out HEAD and that the clone is clean. The same conditions apply: local synthetic mutation and own-generated logs only, no authorization to redistribute derived records, retain notices on any redistribution, no endorsement. They join the v0.2 train repositories; the four v0.2 dev repositories are reused for v0.3 dev. **No v0.3 train or dev repository is `psf/requests`, `pallets/werkzeug` or `pypa/pip`**, and `training/corpus/repos.py` fails closed if that is violated.
+
+| Source | Pin | License evidence | Split | Status |
+|---|---|---|---|---|
+| `jawah/charset_normalizer` | `7d74fe4a8341ae27a8f42c759793301dbd304e10` | [`LICENSE`](https://github.com/jawah/charset_normalizer/blob/7d74fe4a8341ae27a8f42c759793301dbd304e10/LICENSE), MIT text (blob SHA-256 `6d0d41bfe170ac6c...`) | train | Rights-cleared source |
+| `micheles/decorator` | `956b6396c7369aab4acc7a44851572fcb92fb34a` | [`LICENSE.txt`](https://github.com/micheles/decorator/blob/956b6396c7369aab4acc7a44851572fcb92fb34a/LICENSE.txt), BSD-2-Clause text (blob SHA-256 `bd12cc51405c1087...`) | train | Rights-cleared source |
+| `executablebooks/mdurl` | `524d2edbbcb8bb48301ba716c7482827bcabb281` | [`LICENSE`](https://github.com/executablebooks/mdurl/blob/524d2edbbcb8bb48301ba716c7482827bcabb281/LICENSE), MIT text (blob SHA-256 `7c605df6e28667a9...`) | train | Rights-cleared source |
+| `lepture/mistune` | `f7ec702edfc1ad5579a76f881238841af266d93c` | [`LICENSE`](https://github.com/lepture/mistune/blob/f7ec702edfc1ad5579a76f881238841af266d93c/LICENSE), BSD-3-Clause text (blob SHA-256 `539013fd8e19f744...`) | train | Rights-cleared source |
+
+These are source candidates, not accepted cases. Records exist only after the target project's own tests pass on the clean tree and fail after one exact mutation, and pass the schema and semantic gates.
