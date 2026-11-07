@@ -41,5 +41,10 @@ unavailable, fail loudly - do not silently change the training regime.
 - Keep training and inference dependencies separate.
 
 See `docs/training.md` for the full specification.
+For optional MLflow loss curves, effective settings, dataset digests and GPU
+resource tracking, see [development experiment tracking](../docs/experiment-tracking.md).
+`make train-smoke-track` records the CPU toy learning curve; Stage 2 accepts
+`--mlflow` separately in its existing GPU environment. Tracking never uploads
+private examples, source code, checkpoints or weights.
 For the bounded cloud rebuild, transfer approval and publication checks, see
 [`docs/hf-jobs-publication.md`](../docs/hf-jobs-publication.md).

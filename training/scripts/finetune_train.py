@@ -32,6 +32,8 @@ import json
 import sys
 from pathlib import Path
 
+from failurelens.experiment_tracking import add_tracking_arguments, tracking_from_args
+
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stage 2 CodeRankEmbed fine-tuning")
@@ -60,7 +62,10 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Override private dataset root (default: ~/.local/share/failurelens/train-issue17-v2)",
     )
-    return p.parse_args()
+    add_tracking_arguments(p)
+    args = p.parse_args()
+    args.tracking = tracking_from_args(p, args)
+    return args
 
 
 def main() -> None:
@@ -105,6 +110,7 @@ def main() -> None:
         output_dir=output_dir,
         resume_from=resume_from,
         model_cache_dir=args.model_cache_dir,
+        tracking=args.tracking,
     )
 
     print("\n=== Experiment complete ===")

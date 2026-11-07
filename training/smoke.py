@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import random
@@ -10,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from failurelens.experiment_tracking import ExperimentRun, MLflowConfig, track_experiment
 from training.config import TrainConfig
 from training.data import load_training_examples
 from training.objective import InfoNCEObjective, ToyEncoder
@@ -90,12 +92,13 @@ def _metadata(config: TrainConfig, history: list[float], dataset_version: str) -
     }
 
 
-def run_toy_training(
+def _run_toy_training(
     config: TrainConfig | str | Path | None = None,
     *,
     dataset_path: str | Path | None = None,
     resume_from: str | Path | None = None,
     output_dir: str | Path | None = None,
+    experiment: ExperimentRun,
 ) -> dict[str, Any]:
     """Run a tiny offline training loop and export artifacts."""
     config_value = (
@@ -109,6 +112,16 @@ def run_toy_training(
     examples = load_training_examples(dataset_path)
     if not examples:
         raise ValueError("training dataset is empty")
+    if experiment.run_id is not None:
+        experiment.log_params(
+            {
+                "dataset_version": examples[0].dataset_version,
+                "dataset_sha256": hashlib.sha256(
+                    Path(dataset_path or "datasets/fixtures/sample_record.json").read_bytes()
+                ).hexdigest(),
+                "num_examples": len(examples),
+            }
+        )
 
     objective = InfoNCEObjective()
     if resume_from is not None:
@@ -118,6 +131,7 @@ def run_toy_training(
         encoder = ToyEncoder(dim=8, seed=config_value.seed)
         history = []
         start_epoch = 0
+    experiment.log_params({"resume_epoch": start_epoch})
 
     if resume_from is not None and not checkpoint_path.exists():
         raise FileNotFoundError(f"resume checkpoint not found: {checkpoint_path}")
@@ -135,6 +149,7 @@ def run_toy_training(
             encoder.apply_gradients(gradients, config_value.learning_rate)
             epoch_loss += loss
         history.append(epoch_loss / max(1, len(examples)))
+        experiment.log_metrics({"train.loss": history[-1]}, step=epoch)
         _save_checkpoint(
             _checkpoint_file(output_root, epoch),
             epoch=epoch,
@@ -157,18 +172,67 @@ def run_toy_training(
     return artifact
 
 
+def run_toy_training(
+    config: TrainConfig | str | Path | None = None,
+    *,
+    dataset_path: str | Path | None = None,
+    resume_from: str | Path | None = None,
+    output_dir: str | Path | None = None,
+    tracking: MLflowConfig | None = None,
+) -> dict[str, Any]:
+    """Run the offline toy loop with optional development experiment tracking."""
+    config_value = (
+        config
+        if isinstance(config, TrainConfig)
+        else TrainConfig.from_json(config or "training/configs/toy_config.json")
+    )
+    with track_experiment(
+        tracking, kind="toy-training", repository=Path(__file__).resolve().parents[1]
+    ) as experiment:
+        parameters = config_value.model_dump(
+            include={"seed", "learning_rate", "epochs", "objective", "revision"}
+        )
+        # The toy loop updates once per example using this simple CPU encoder.
+        parameters.update(
+            {
+                "optimizer": "toy-gradient-descent",
+                "encoder": "toy-encoder-dim8",
+                "batch_size": 1,
+                "resumed": resume_from is not None,
+            }
+        )
+        experiment.log_params(parameters)
+        experiment.log_dict(parameters, "config.json")
+        artifact = _run_toy_training(
+            config_value,
+            dataset_path=dataset_path,
+            resume_from=resume_from,
+            output_dir=output_dir,
+            experiment=experiment,
+        )
+        experiment.log_metrics({"train.final_loss": artifact["metrics"]["final_loss"]})
+        experiment.log_dict(
+            {"history": artifact["history"], "metrics": artifact["metrics"]}, "training.json"
+        )
+    return artifact
+
+
 if __name__ == "__main__":
     import argparse
+
+    from failurelens.experiment_tracking import add_tracking_arguments, tracking_from_args
 
     parser = argparse.ArgumentParser(description="Run the toy CPU training smoke test")
     parser.add_argument("--config", default="training/configs/toy_config.json")
     parser.add_argument("--dataset", default="datasets/fixtures/sample_record.json")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--resume-from", default=None)
+    add_tracking_arguments(parser)
     args = parser.parse_args()
     run_toy_training(
         args.config,
         dataset_path=args.dataset,
         resume_from=args.resume_from,
         output_dir=args.output_dir,
+        tracking=tracking_from_args(parser, args),
     )
