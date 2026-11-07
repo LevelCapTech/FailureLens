@@ -36,6 +36,7 @@ from failurelens.experiment_tracking import (
     track_experiment,
     tracking_from_args,
 )
+from failurelens.notify import notify_run
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BENCHMARK = REPO_ROOT / "evaluation" / "benchmarks" / "sample_cases.json"
@@ -122,6 +123,7 @@ def run(benchmark_path: Path, *, tracking: MLflowConfig | None = None) -> dict[s
                 {
                     "benchmark": benchmark_path.name,
                     "benchmark_sha256": hashlib.sha256(benchmark_path.read_bytes()).hexdigest(),
+                    "dataset_sha256": hashlib.sha256(benchmark_path.read_bytes()).hexdigest(),
                     "score_type": "heuristic",
                     "candidate_limit": DiagnoseConfig().top_k,
                 }
@@ -158,7 +160,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"benchmark not found: {args.benchmark}", file=sys.stderr)
         return 2
 
-    report = run(args.benchmark, tracking=tracking)
+    run_name = tracking.run_name if tracking is not None else None
+    with notify_run("baseline-evaluation", run_name) as notifier:
+        report = run(args.benchmark, tracking=tracking)
+        notifier.set_metrics(
+            {
+                f"{level}.{key}": value
+                for level in ("file_level", "function_level")
+                for key, value in report.get(level, {}).items()
+                if key in ("mrr", "top_1_accuracy", "num_cases")
+            }
+        )
     text = json.dumps(report, indent=2, sort_keys=True)
     print(text)
     if args.output is not None:

@@ -7,6 +7,7 @@ import argparse
 from training.smoke import run_toy_training
 
 from failurelens.experiment_tracking import add_tracking_arguments, tracking_from_args
+from failurelens.notify import notify_run
 
 
 def main() -> None:
@@ -17,13 +18,16 @@ def main() -> None:
     parser.add_argument("--resume-from", default=None)
     add_tracking_arguments(parser)
     args = parser.parse_args()
-    result = run_toy_training(
-        args.config,
-        dataset_path=args.dataset,
-        resume_from=args.resume_from,
-        output_dir=args.output_dir,
-        tracking=tracking_from_args(parser, args),
-    )
+    tracking = tracking_from_args(parser, args)
+    with notify_run("toy-training", args.mlflow_run_name) as notifier:
+        result = run_toy_training(
+            args.config,
+            dataset_path=args.dataset,
+            resume_from=args.resume_from,
+            output_dir=args.output_dir,
+            tracking=tracking,
+        )
+        notifier.set_metrics({"train.final_loss": result["metrics"]["final_loss"]})
     print(result["metrics"]["final_loss"])
 
 

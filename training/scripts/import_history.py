@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
@@ -15,6 +16,8 @@ from failurelens.experiment_tracking import (
     track_experiment,
     tracking_from_args,
 )
+from failurelens.notify import notify_run
+from failurelens.tracking_registry import MODEL_STATUSES, register_model_version
 
 
 class TrainingHistory(BaseModel):
@@ -46,7 +49,16 @@ class RecordedTraining(BaseModel):
     peak_gpu_memory_mib: int = Field(ge=0)
 
 
-def import_history(path: Path, *, tracking: MLflowConfig) -> str:
+def _derived_cosine_lr(base: float, epoch: int, total: int) -> float:
+    """LR after ``epoch`` scheduler steps of CosineAnnealingLR(T_max=total).
+
+    Older records did not save the per-epoch rate. Stage 2 used this scheduler, so
+    the value is derived, not measured; the run says so in its parameters.
+    """
+    return base * (1 + math.cos(math.pi * epoch / total)) / 2
+
+
+def import_history(path: Path, *, tracking: MLflowConfig, status: str = "experimental") -> str:
     """Import local experiment metadata or a saved public cloud provenance JSON."""
     raw = path.read_bytes()
     document = json.loads(raw)
@@ -82,8 +94,12 @@ def import_history(path: Path, *, tracking: MLflowConfig) -> str:
             "artifact_sha256": recorded.artifact_sha256,
             "history_source_sha256": hashlib.sha256(raw).hexdigest(),
             "measurement_scope": "historical-training-only",
+            "epochs_total": source["config"]["epochs"],
         }
     )
+    base_lr = source["config"].get("learning_rate")
+    if base_lr is not None:
+        parameters["learning_rate_schedule"] = "cosine-annealing-derived-not-measured"
     environment = {
         key: metadata[key]
         for key in ("python", "torch_version", "device_name", "device_memory_mib")
@@ -119,9 +135,17 @@ def import_history(path: Path, *, tracking: MLflowConfig) -> str:
         for epoch, (train_loss, val_loss) in enumerate(
             zip(recorded.history.train_loss, recorded.history.val_loss, strict=True), 1
         ):
-            experiment.log_metrics(
-                {"train.loss": train_loss, "validation.loss": val_loss}, step=epoch
+            experiment.log_epoch(
+                epoch,
+                train_loss=train_loss,
+                validation_loss=val_loss,
+                learning_rate=(
+                    _derived_cosine_lr(base_lr, epoch, len(recorded.history.train_loss))
+                    if base_lr is not None
+                    else None
+                ),
             )
+        experiment.log_training_summary(recorded.history.train_loss, recorded.history.val_loss)
         experiment.log_metrics(
             {
                 "train.elapsed_seconds": recorded.elapsed_seconds,
@@ -155,6 +179,18 @@ def import_history(path: Path, *, tracking: MLflowConfig) -> str:
         axes.grid(alpha=0.2)
         experiment.log_figure(figure, "loss_curves.png")
         assert experiment.run_id is not None
+        if tracking.model_version:
+            register_model_version(
+                run_id=experiment.run_id,
+                model_version=tracking.model_version,
+                source_commit=recorded.git_sha,
+                weight_sha256=recorded.artifact_sha256,
+                weights_path=None,
+                status=status,
+                historical=True,
+                tracking_uri=experiment.store_uri,
+                repository=Path(__file__).resolve().parents[2],
+            )
         return experiment.run_id
 
 
@@ -163,12 +199,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "metadata", type=Path, help="An existing experiment_metadata.json or cloud provenance JSON."
     )
+    parser.add_argument(
+        "--status",
+        choices=MODEL_STATUSES,
+        default="experimental",
+        help="Registry status tag when --model-version registers the imported weights' record.",
+    )
     add_tracking_arguments(parser)
     args = parser.parse_args(argv)
     tracking = tracking_from_args(parser, args)
     if tracking is None:
         parser.error("Importing historical measurements requires --mlflow")
-    print(import_history(args.metadata, tracking=tracking))
+    with notify_run("history-import", tracking.run_name):
+        print(import_history(args.metadata, tracking=tracking, status=args.status))
     return 0
 
 
