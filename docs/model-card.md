@@ -26,7 +26,7 @@
 | Code git SHA | `795b0a1c6f94198d93ebd36e45d3d61e8574549e` |
 | Trained weights in Git | No |
 | Trained weights on HF Hub | A distinct cloud rebuild is published; see below and the [Job runbook](hf-jobs-publication.md) |
-| Gate C evaluation | Not yet run |
+| Gate C evaluation | Measured (v0.2 report); acceptance thresholds not met, superiority not established |
 | Gate D adoption/publication | Experimental publication approved; adoption not established |
 | Shipped baseline (for comparison) | `analysis_method = baseline-stacktrace-lexical` |
 
@@ -154,7 +154,7 @@ Gate A measured results (n=1, single fixture case, not generalisable):
 | Gate A — Pilot + baseline measurement | Done (2026-10-27) |
 | Gate B — Acceptance criteria frozen | Done (2026-10-29, human-owner approved) |
 | Implementation Go | Done (2026-10-29, human-owner approved) |
-| Gate C — Independent held-out evaluation | **Not yet run** (blocked by comparator protocol review) |
+| Gate C — Independent held-out evaluation | Measured once for the v0.2 candidate and the v0.1 reference; **thresholds not met** (see [v0.2 report](releases/v0.2/REPORT.md)) |
 | Gate D — Adoption / publication | Owner approved experimental cloud publication; adoption decision remains separate |
 
 ## Licensing
