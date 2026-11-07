@@ -489,3 +489,19 @@ def test_freeze_unfreezes_requested_number_of_last_layers() -> None:
         _freeze_all_but_last_encoder_layer(_Model(2), 3)
     with pytest.raises(ValueError, match=">= 1"):
         _freeze_all_but_last_encoder_layer(_Model(2), 0)
+
+
+def test_training_token_limit_is_applied_and_validated() -> None:
+    import pytest
+    from training.finetune import _apply_training_token_limit
+
+    class _Model:
+        max_seq_length = 8192
+
+    model = _Model()
+    _apply_training_token_limit(model, {})
+    assert model.max_seq_length == 8192
+    _apply_training_token_limit(model, {"training_max_tokens": 1536})
+    assert model.max_seq_length == 1536
+    with pytest.raises(ValueError):
+        _apply_training_token_limit(model, {"training_max_tokens": 8})

@@ -16,5 +16,6 @@
   "split": "repo-level-train-dev",
   "trainable_layers": "last-2-encoder-layers",
   "trainable_encoder_layers": 2,
-  "micro_batch_size": 1
+  "micro_batch_size": 1,
+  "training_max_tokens": 1536
 }

@@ -98,6 +98,21 @@ def _infonce_loss(
     return F.cross_entropy(logits, labels)
 
 
+def _apply_training_token_limit(model: Any, config: dict[str, Any]) -> None:
+    """Truncate training/validation inputs to ``training_max_tokens`` when configured.
+
+    This only bounds activation memory on small GPUs; it does not change the
+    saved weights format or inference-time behavior.
+    """
+    limit = config.get("training_max_tokens")
+    if limit is None:
+        return
+    limit = int(limit)
+    if limit < 64:
+        raise ValueError("training_max_tokens must be >= 64")
+    model.max_seq_length = limit
+
+
 def _encode_batch(model: Any, texts: list[str], device: Any) -> Any:
     """Forward pass maintaining gradient graph."""
     import torch
@@ -294,6 +309,7 @@ def _run_stage2_finetune(
     )
     model = encoder_wrapper._model  # type: ignore[attr-defined]  # raw SentenceTransformer
     model.to(device)
+    _apply_training_token_limit(model, config)
 
     trainable, total = _freeze_all_but_last_encoder_layer(
         model, int(config.get("trainable_encoder_layers", 1))
