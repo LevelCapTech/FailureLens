@@ -161,3 +161,20 @@ def test_final_evaluation_uses_fixed_weights_without_model(tmp_path: Path) -> No
         driver.evaluate_final(cases, baseline, components, (1, 0, 0, 0))
     with pytest.raises(PrivateInputError):
         driver.weights_from_method("E-base")
+
+
+def test_recording_is_idempotent_and_aggregate_only(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("mlflow")
+    from evaluation import record_full_pool
+
+    monkeypatch.setenv("MLFLOW_DISABLE_TELEMETRY", "true")
+    cases, baseline = _load_full(_fixture(tmp_path / "fx"))
+    lens = FailureLens.from_baseline()
+    components = [methods.build_components(c.request, lens.parsers.parse) for c in cases]
+    report = driver.run_experiment(cases, baseline, components, {"fake": [[0.9, 0.1]]})
+    path = driver.write_report(report, tmp_path / "out", "r.json")
+    uri = f"sqlite:///{tmp_path / 'store.db'}"
+    assert record_full_pool.record(path, "run-one", "v0.4.0-test", uri) == "recorded"
+    assert record_full_pool.record(path, "run-one", "v0.4.0-test", uri).startswith("skipped")
+    metrics = record_full_pool.flatten(report)
+    assert metrics["dev.stop_rule.pass"] in {0.0, 1.0} and metrics["pool.function_recall"] == 1.0
