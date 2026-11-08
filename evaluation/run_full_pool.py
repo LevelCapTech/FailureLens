@@ -359,6 +359,79 @@ def run_experiment(
     }
 
 
+THRESHOLDS = {"top1": 0.4, "mrr": 0.6, "top1_delta": 0.4, "mrr_delta": 0.1}
+BUDGETS = {"latency_p95_s": 5.0, "peak_rss_gib": 8.0}
+
+
+def weights_from_method(method: str) -> tuple[float, float, float, float]:
+    """Read the fixed weights of the dev-selected method (``F-<model>|a,b,c,d``)."""
+    head, _, raw = method.partition("|")
+    values = tuple(float(v) for v in raw.split(",")) if raw else ()
+    if not head.startswith("F-") or len(values) != 4:
+        _reject("final evaluation needs a fused method from the dev report")
+    return values[0], values[1], values[2], values[3]
+
+
+def evaluate_final(
+    cases: Sequence[PrivateCase],
+    baseline: ProductBaseline,
+    components: Sequence[CaseComponents],
+    weights: tuple[float, float, float, float],
+) -> dict[str, Any]:
+    """One fixed configuration vs the shipped baseline (S0) and lexical-full (L1).
+
+    The configuration must not use the embedding term (no model is loaded here).
+    """
+    if weights[0] != 0:
+        _reject("final evaluation without a model requires w_e = 0")
+    strata = [case.repository_id for case in cases]
+    metrics = {
+        "S0": per_case_metrics(cases, [baseline(case.request).ordered_ids for case in cases]),
+        "L1": per_case_metrics(cases, [order_by(c.ids, c.lexical) for c in components]),
+        "selected": per_case_metrics(
+            cases,
+            [order_by(c.ids, fused_scores(c, [0.0] * len(c.ids), weights)) for c in components],
+        ),
+    }
+    chosen = metrics["selected"]
+    out: dict[str, Any] = {
+        "cases": len(cases),
+        "repositories": len(set(strata)),
+        "weights": list(weights),
+        "selected": {
+            "function_mrr": round(_mean(chosen[0]), 4),
+            "function_top1": round(_mean(chosen[1]), 4),
+        },
+        "comparisons": {},
+        "pool_recall": pool_recall(cases),
+    }
+    for name in ("S0", "L1"):
+        reference = metrics[name]
+        mrr_ci = paired_bootstrap(strata, reference[0], chosen[0])
+        top1_ci = paired_bootstrap(strata, reference[1], chosen[1])
+        out["comparisons"][name] = {
+            "reference_mrr": round(_mean(reference[0]), 4),
+            "reference_top1": round(_mean(reference[1]), 4),
+            "mrr_delta": round(_mean(chosen[0]) - _mean(reference[0]), 4),
+            "mrr_delta_ci95": _round(mrr_ci["delta"]),
+            "top1_delta": round(_mean(chosen[1]) - _mean(reference[1]), 4),
+            "top1_delta_ci95": _round(top1_ci["delta"]),
+        }
+    top1, mrr = _mean(chosen[1]), _mean(chosen[0])
+    checks: dict[str, bool] = {
+        "top1_ge_0.4": top1 >= THRESHOLDS["top1"],
+        "mrr_ge_0.6": mrr >= THRESHOLDS["mrr"],
+    }
+    for name in ("S0", "L1"):
+        comparison = out["comparisons"][name]
+        checks[f"top1_gain_vs_{name}_ge_0.4"] = comparison["top1_delta"] >= THRESHOLDS["top1_delta"]
+        checks[f"mrr_gain_vs_{name}_ge_0.1"] = comparison["mrr_delta"] >= THRESHOLDS["mrr_delta"]
+    checks["cases_ge_30"] = len(cases) >= 30
+    checks["repositories_ge_3"] = len(set(strata)) >= 3
+    out["threshold_checks"] = checks
+    return out
+
+
 def pool_recall(cases: Sequence[PrivateCase]) -> dict[str, float | int]:
     sizes = [len(case.request.candidates) for case in cases]
     function_hits = sum(
@@ -405,6 +478,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--embedding-cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--label", default="v0.4-dev")
+    parser.add_argument(
+        "--final-from",
+        type=Path,
+        help="dev report whose selected fused method is evaluated once, without searching",
+    )
     args = parser.parse_args(argv)
 
     started_all = time.perf_counter()
@@ -420,6 +498,65 @@ def main(argv: Sequence[str] | None = None) -> int:
         pool="full",
     )
     lens = FailureLens.from_baseline()
+    if args.final_from is not None:
+        if args.dev:
+            _reject("the final evaluation must not use --dev")
+        selected = json.loads(args.final_from.read_text(encoding="utf-8"))["selected"]["method"]
+        weights = weights_from_method(selected)
+        components = [build_components(case.request, lens.parsers.parse) for case in cases]
+        rank_started = time.perf_counter()
+        report = evaluate_final(cases, baseline, components, weights)
+        tree_entries = json.loads(args.tree_manifest.read_text(encoding="utf-8"))["cases"]
+        index_seconds = []
+        for entry in tree_entries.values():
+            began = time.perf_counter()
+            lens.index(Path(entry["root"]))
+            index_seconds.append(time.perf_counter() - began)
+        rank_seconds = []
+        for case in cases:
+            began = time.perf_counter()
+            comp = build_components(case.request, lens.parsers.parse)
+            order_by(comp.ids, fused_scores(comp, [0.0] * len(comp.ids), weights))
+            rank_seconds.append(time.perf_counter() - began)
+        per_case = [i + r for i, r in zip(index_seconds, rank_seconds, strict=False)]
+        report["label"] = args.label
+        report["selected_method_from_dev"] = selected
+        report["generated_utc"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        report["timing"] = {
+            "index": _timing(index_seconds),
+            "rank_components": _timing(rank_seconds),
+            "index_plus_rank": _timing(per_case),
+        }
+        report["resources"] = {
+            "peak_rss_gib": round(_rss_gib(), 3),
+            "model_parameters": 0,
+            "total_seconds": round(time.perf_counter() - rank_started, 1),
+        }
+        report["threshold_checks"]["latency_p95_le_5s"] = (
+            report["timing"]["index_plus_rank"]["p95_s"] <= BUDGETS["latency_p95_s"]
+        )
+        report["threshold_checks"]["rss_le_8gib"] = (
+            report["resources"]["peak_rss_gib"] <= BUDGETS["peak_rss_gib"]
+        )
+        path = write_report(report, args.out_dir, f"{args.label}.json")
+        print(
+            json.dumps(
+                {
+                    k: report[k]
+                    for k in (
+                        "selected",
+                        "comparisons",
+                        "threshold_checks",
+                        "pool_recall",
+                        "timing",
+                        "resources",
+                    )
+                },
+                indent=2,
+            )
+        )
+        print(f"report: {path}")
+        return 0
     components = [build_components(case.request, lens.parsers.parse) for case in cases]
     tree_entries = json.loads(args.tree_manifest.read_text(encoding="utf-8"))["cases"]
     index_seconds: list[float] = []

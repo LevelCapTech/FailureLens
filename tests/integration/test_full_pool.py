@@ -146,3 +146,18 @@ def test_experiment_on_synthetic_case_and_report_permissions(tmp_path: Path) -> 
     path = driver.write_report(report, tmp_path / "out", "r.json")
     assert path.stat().st_mode & 0o777 == 0o600
     json.loads(path.read_text())  # serializable
+
+
+def test_final_evaluation_uses_fixed_weights_without_model(tmp_path: Path) -> None:
+    cases, baseline = _load_full(_fixture(tmp_path))
+    lens = FailureLens.from_baseline()
+    components = [methods.build_components(c.request, lens.parsers.parse) for c in cases]
+    weights = driver.weights_from_method("F-basepfx|0,0,0.25,0.25")
+    assert weights == (0, 0, 0.25, 0.25)
+    report = driver.evaluate_final(cases, baseline, components, weights)
+    assert report["cases"] == 1 and set(report["comparisons"]) == {"S0", "L1"}
+    assert report["threshold_checks"]["cases_ge_30"] is False
+    with pytest.raises(PrivateInputError):
+        driver.evaluate_final(cases, baseline, components, (1, 0, 0, 0))
+    with pytest.raises(PrivateInputError):
+        driver.weights_from_method("E-base")
