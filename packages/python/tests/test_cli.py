@@ -114,3 +114,42 @@ def test_index_command_reports_counts(sample_repo: Path) -> None:
     result = runner.invoke(app, ["index", "-r", str(sample_repo), "--quiet"])
     assert result.exit_code == ExitCode.OK
     assert "file(s)" in result.stdout
+
+
+def test_diagnose_selects_baseline_strategy(
+    sample_repo: Path, sample_traceback: str, tmp_path: Path
+) -> None:
+    log = _write_log(tmp_path, sample_traceback)
+    for strategy, method in (
+        ("stacktrace-callgraph", "baseline-stacktrace-callgraph"),
+        ("stacktrace-lexical", "baseline-stacktrace-lexical"),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "diagnose",
+                "-r",
+                str(sample_repo),
+                "-l",
+                str(log),
+                "-f",
+                "json",
+                "--baseline",
+                strategy,
+                "--quiet",
+            ],
+        )
+        assert result.exit_code == ExitCode.OK
+        payload = json.loads(result.stdout)
+        assert payload["analysis_method"] == method
+        assert payload["candidates"][0]["function"] == "divide"
+
+
+def test_diagnose_rejects_unknown_baseline_strategy(
+    sample_repo: Path, sample_traceback: str, tmp_path: Path
+) -> None:
+    log = _write_log(tmp_path, sample_traceback)
+    result = runner.invoke(
+        app, ["diagnose", "-r", str(sample_repo), "-l", str(log), "--baseline", "nope", "-q"]
+    )
+    assert result.exit_code == ExitCode.INPUT_ERROR

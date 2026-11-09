@@ -19,8 +19,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-#: Version of the result schema. Bump on any breaking change to the models below.
-SCHEMA_VERSION = "0.1.0"
+#: Version of the result schema. Bump on any change to the models below that a
+#: consumer could observe (0.2.0 added the ``call_relation`` evidence kind).
+SCHEMA_VERSION = "0.2.0"
 
 
 class AnalysisStatus(StrEnum):
@@ -57,6 +58,8 @@ class EvidenceKind(StrEnum):
     PATH_MATCH = "path_match"
     LEXICAL_MATCH = "lexical_match"
     SIMILARITY = "similarity"
+    #: Static call relation (by name) with a function that appears in the stack trace.
+    CALL_RELATION = "call_relation"
 
 
 class UnitKind(StrEnum):

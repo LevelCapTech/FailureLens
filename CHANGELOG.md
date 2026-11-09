@@ -9,6 +9,14 @@ and this project aims to adhere to [Semantic Versioning](https://semver.org/spec
 
 ### Added
 
+#### Call-graph baseline (opt-in strategy)
+- `baseline-stacktrace-callgraph` analyzer: ranks every function and method from
+  the stack-trace depth plus static, name-based call relations (up to two hops)
+  to functions in the stack. No model, offline, no new dependencies.
+  Select it with `FailureLens.from_baseline(strategy="stacktrace-callgraph")` or
+  `failurelens diagnose --baseline stacktrace-callgraph`.
+- Output schema `0.2.0`: new evidence kind `call_relation` (additive).
+
 #### Monorepo bootstrap and core library
 - Initial FailureLens monorepo bootstrap.
 - `failurelens` Python package (core deps: `pydantic`, `typer`):

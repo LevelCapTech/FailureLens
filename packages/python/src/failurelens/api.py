@@ -23,7 +23,7 @@ from failurelens.config import DiagnoseConfig, IndexConfig
 from failurelens.errors import InputError
 from failurelens.indexing.base import RepositoryIndex
 from failurelens.indexing.repository import build_index
-from failurelens.inference.baseline import BaselineAnalyzer
+from failurelens.inference import BASELINE_STRATEGIES, DEFAULT_BASELINE_STRATEGY
 from failurelens.inference.engine import Analyzer
 from failurelens.parsers.base import ParserRegistry, default_registry
 from failurelens.schemas import AnalysisStatus, DiagnosisResult
@@ -43,9 +43,25 @@ class FailureLens:
 
     # ------------------------------------------------------------------ factories
     @classmethod
-    def from_baseline(cls, *, parser_registry: ParserRegistry | None = None) -> FailureLens:
-        """Create an engine using the dependency-free baseline analyzer."""
-        return cls(BaselineAnalyzer(), parser_registry=parser_registry)
+    def from_baseline(
+        cls,
+        *,
+        strategy: str | None = None,
+        parser_registry: ParserRegistry | None = None,
+    ) -> FailureLens:
+        """Create an engine using a dependency-free baseline analyzer.
+
+        ``strategy`` selects ``"stacktrace-lexical"`` or ``"stacktrace-callgraph"``;
+        ``None`` uses the package default (``failurelens.inference.DEFAULT_BASELINE_STRATEGY``).
+        Both run offline on CPU with no model.
+        """
+        name = strategy or DEFAULT_BASELINE_STRATEGY
+        analyzer_class = BASELINE_STRATEGIES.get(name)
+        if analyzer_class is None:
+            raise InputError(
+                f"Unknown baseline strategy {name!r}; choose one of {sorted(BASELINE_STRATEGIES)}."
+            )
+        return cls(analyzer_class(), parser_registry=parser_registry)
 
     @classmethod
     def from_pretrained(

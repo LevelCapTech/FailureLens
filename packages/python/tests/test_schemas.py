@@ -55,3 +55,10 @@ def test_status_values_are_stable_strings() -> None:
     assert AnalysisStatus.NO_CANDIDATES == "no_candidates"
     assert AnalysisStatus.INSUFFICIENT_EVIDENCE == "insufficient_evidence"
     assert AnalysisStatus.ERROR == "error"
+
+
+def test_call_relation_evidence_kind_is_part_of_schema_0_2_0() -> None:
+    from failurelens.schemas import EvidenceKind
+
+    assert SCHEMA_VERSION == "0.2.0"
+    assert EvidenceKind.CALL_RELATION.value == "call_relation"

@@ -80,9 +80,13 @@ def version() -> None:
     typer.echo(__version__)
 
 
-def _build_lens(model: str, revision: str | None) -> FailureLens:
+def _build_lens(model: str, revision: str | None, strategy: str | None = None) -> FailureLens:
     if model == BASELINE_MODEL_ID:
-        return FailureLens.from_baseline()
+        try:
+            return FailureLens.from_baseline(strategy=strategy)
+        except InputError as exc:
+            _echo_err(f"error: {exc}")
+            raise typer.Exit(code=ExitCode.INPUT_ERROR) from exc
     try:
         return FailureLens.from_pretrained(model, revision=revision)
     except MissingDependencyError as exc:
@@ -148,10 +152,20 @@ def diagnose(
     revision: Annotated[
         str | None, typer.Option("--revision", help="Pinned model revision (model backends only).")
     ] = None,
+    baseline: Annotated[
+        str | None,
+        typer.Option(
+            "--baseline",
+            help=(
+                "Baseline strategy: stacktrace-lexical or stacktrace-callgraph "
+                "(baseline backend only; default: the package default)."
+            ),
+        ),
+    ] = None,
     quiet: QuietOption = False,
 ) -> None:
     """Diagnose a failure and rank candidate fault locations."""
-    lens = _build_lens(model, revision)
+    lens = _build_lens(model, revision, baseline)
     if not quiet:
         _echo_err(f"Analyzing {repo} with log {log} ...")
     try:

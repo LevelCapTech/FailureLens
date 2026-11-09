@@ -59,3 +59,29 @@ def test_cli_diagnoses_fixture_json() -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "ok"
     assert payload["candidates"][0]["function"] == "divide"
+
+
+def test_callgraph_strategy_diagnoses_fixture_like_the_default() -> None:
+    lens = FailureLens.from_baseline(strategy="stacktrace-callgraph")
+    result = lens.diagnose(FIXTURE, error_log=FIXTURE_LOG, top_k=5)
+
+    assert result.status is AnalysisStatus.OK
+    assert result.analysis_method == "baseline-stacktrace-callgraph"
+    assert result.candidates[0].function == "divide"
+    assert any(c.function == "average" for c in result.candidates)
+    assert all(c.score_type.value == "heuristic" for c in result.candidates)
+
+
+def test_lexical_strategy_output_is_unchanged() -> None:
+    lens = FailureLens.from_baseline(strategy="stacktrace-lexical")
+    result = lens.diagnose(FIXTURE, error_log=FIXTURE_LOG, top_k=5)
+
+    assert result.analysis_method == "baseline-stacktrace-lexical"
+    got = [(c.file, c.function, c.start_line, c.end_line, c.score) for c in result.candidates]
+    assert got == [
+        ("calculator/core.py", "divide", 6, 12, 0.8),
+        ("calculator/core.py", "average", 15, 22, 0.613333),
+        ("app.py", "report_scores", 11, 12, 0.36),
+        ("app.py", None, None, None, 0.24),
+        ("app.py", "main", 15, 17, 0.12),
+    ]
