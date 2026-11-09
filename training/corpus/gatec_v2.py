@@ -457,8 +457,17 @@ def generate_eval_repo(
     per_function: int = 3,
     max_attempts: int | None = None,
     log: Log = build._log,
+    hard: bool = False,
+    dataset_id: str = EVAL_DATASET_ID,
+    generator_version: str = EVAL_GENERATOR_VERSION,
+    categorize: Callable[[str, str, str, Path], str] | None = None,
 ) -> tuple[list[EvalCase], dict[str, Any]]:
-    """Generate up to ``target`` execution-validated candidate cases (oversupply for selection)."""
+    """Generate up to ``target`` execution-validated candidate cases (oversupply for selection).
+
+    ``hard`` also enumerates the v0.3 hard text shapes; ``categorize(stack_trace, file,
+    function, work_tree)`` replaces the default surfacing classifier. The defaults
+    reproduce the Gate C v2 behaviour exactly.
+    """
     work = ws.work(repo)
     started = time.monotonic()
     base = _baseline(ws, repo)
@@ -508,7 +517,7 @@ def generate_eval_repo(
     for file, info in plan:
         if len(cases) >= target or report["attempted"] >= attempts_cap:
             break
-        mutations = enumerate_mutations(sources[file], info) + enumerate_extra_mutations(
+        mutations = enumerate_mutations(sources[file], info, hard=hard) + enumerate_extra_mutations(
             sources[file], info
         )
         rng.shuffle(mutations)
@@ -546,13 +555,18 @@ def generate_eval_repo(
                 negatives,
                 exception,
             )
-            record["dataset_id"] = EVAL_DATASET_ID
-            record["generator_version"] = EVAL_GENERATOR_VERSION
+            record["dataset_id"] = dataset_id
+            record["generator_version"] = generator_version
+            category = (
+                categorize(log_text[1], file, info.name, work)
+                if categorize is not None
+                else classify_surfacing(log_text[1], file, info.name)
+            )
             cases.append(
                 EvalCase(
                     record,
                     _mutation_dict(file, mutation),
-                    classify_surfacing(log_text[1], file, info.name),
+                    category,
                     mutation.kind,
                     repo.slug,
                     f"{file}::{info.name}",
@@ -580,7 +594,12 @@ CATEGORY_SHARE: dict[str, float] = {
 
 
 def select_cases(
-    cases: list[EvalCase], total: int, *, seed: int, per_function: int = 2
+    cases: list[EvalCase],
+    total: int,
+    *,
+    seed: int,
+    per_function: int = 2,
+    shares: dict[str, float] | None = None,
 ) -> list[EvalCase]:
     """Seeded, stratified selection by repository, surfacing category and mutation kind.
 
@@ -598,7 +617,7 @@ def select_cases(
     quota = dict.fromkeys(repos, total // len(repos)) if repos else {}
     for repo in repos[: total - sum(quota.values())]:
         quota[repo] += 1
-    wanted = {c: max(1, round(total * s)) for c, s in CATEGORY_SHARE.items()}
+    wanted = {c: max(1, round(total * s)) for c, s in (shares or CATEGORY_SHARE).items()}
     picked: list[EvalCase] = []
     chosen: set[int] = set()
     function_count: Counter[str] = Counter()
@@ -812,7 +831,9 @@ def finalize(
 # --------------------------------------------------------------------------- check
 
 
-def check(ws: Workspace, *, top_k: int = 5) -> dict[str, Any]:
+def check(
+    ws: Workspace, *, top_k: int = 5, categories: tuple[str, ...] = CATEGORIES
+) -> dict[str, Any]:
     """Structural sanity only: load through the product pool, report pool recall.
 
     No model is loaded and no scores are produced. Reports retrieval abstentions and
@@ -834,7 +855,7 @@ def check(ws: Workspace, *, top_k: int = 5) -> dict[str, Any]:
         production=True,
         allow_ambiguous_retrieved_names=True,
     )
-    by_category: dict[str, list[int]] = {c: [0, 0, 0] for c in CATEGORIES}  # n, recalled, empty
+    by_category: dict[str, list[int]] = {c: [0, 0, 0] for c in categories}  # n, recalled, empty
     total_recalled = abstained = 0
     for record, case in zip(records, cases, strict=True):
         # compare function identities (file::name): candidate ids embed line spans, which
