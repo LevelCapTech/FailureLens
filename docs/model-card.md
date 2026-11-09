@@ -26,7 +26,7 @@
 | Code git SHA | `795b0a1c6f94198d93ebd36e45d3d61e8574549e` |
 | Trained weights in Git | No |
 | Trained weights on HF Hub | A distinct cloud rebuild is published; see below and the [Job runbook](hf-jobs-publication.md) |
-| Gate C evaluation | Measured for v0.2 (thresholds not met); v0.3 candidates did not pass dev selection, so the v0.3 final set was not used; superiority not established |
+| Gate C evaluation | Measured for v0.2 (thresholds not met); v0.3 candidates did not pass dev selection; a model-free v0.4 full-repository method was measured once on Gate C v2 (thresholds not met, see [v0.4 report](releases/v0.4/REPORT.md)); superiority of the trained model not established |
 | Gate D adoption/publication | Experimental publication approved; adoption not established |
 | Shipped baseline (for comparison) | `analysis_method = baseline-stacktrace-lexical` |
 
