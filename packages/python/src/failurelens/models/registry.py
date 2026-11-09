@@ -48,7 +48,9 @@ _REGISTRY: tuple[ModelInfo, ...] = (
         id=BASELINE_MODEL_ID,
         kind="baseline",
         description=(
-            "Dependency-free stack-trace + lexical fault localization. Always available; "
+            "Dependency-free fault localization from the stack trace and static call "
+            "relations (strategy stacktrace-callgraph, the default); the original "
+            "stack-trace + lexical strategy stays selectable. No model. Always available; "
             "runs on CPU with no network access."
         ),
         released=True,

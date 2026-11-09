@@ -12,7 +12,7 @@ BASELINE_STRATEGIES: dict[str, type[BaselineAnalyzer] | type[CallGraphAnalyzer]]
     "stacktrace-callgraph": CallGraphAnalyzer,
 }
 #: Strategy used when none is requested.
-DEFAULT_BASELINE_STRATEGY = "stacktrace-lexical"
+DEFAULT_BASELINE_STRATEGY = "stacktrace-callgraph"
 
 __all__ = [
     "BASELINE_STRATEGIES",

@@ -19,7 +19,7 @@ def test_diagnose_from_error_text_ranks_exception_site_first(
 
     assert result.status is AnalysisStatus.OK
     assert result.error_type == "ZeroDivisionError"
-    assert result.analysis_method == "baseline-stacktrace-lexical"
+    assert result.analysis_method == "baseline-stacktrace-callgraph"
     assert result.model_id is None
     assert result.execution_time_ms >= 0.0
 

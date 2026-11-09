@@ -34,7 +34,7 @@ def test_harness_reports_real_metrics_on_fixture() -> None:
     harness = _load_harness()
     report = harness.run(BENCHMARK_PATH)
 
-    assert report["analysis_method"] == "baseline-stacktrace-lexical"
+    assert report["analysis_method"] == "baseline-stacktrace-callgraph"
 
     file_level = report["file_level"]
     assert file_level["num_cases"] == 1.0
@@ -87,4 +87,4 @@ runpy.run_path(sys.argv[0], run_name="__main__")
     completed = subprocess.run(
         [sys.executable, "-c", script], cwd=REPO_ROOT, capture_output=True, text=True, check=True
     )
-    assert json.loads(completed.stdout)["analysis_method"] == "baseline-stacktrace-lexical"
+    assert json.loads(completed.stdout)["analysis_method"] == "baseline-stacktrace-callgraph"
