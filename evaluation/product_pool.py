@@ -317,7 +317,7 @@ def load_product_cases(
         entries = tree_manifest["cases"]
         if not isinstance(entries, dict) or set(entries) != {r["record_id"] for r in records}:
             _reject("failing tree coverage mismatch")
-        lens = FailureLens.from_baseline()
+        lens = FailureLens.from_baseline(strategy="stacktrace-lexical")
         result_cases: list[PrivateCase] = []
         orders: dict[str, tuple[str, ...]] = {}
         for record, prior in zip(records, original, strict=True):

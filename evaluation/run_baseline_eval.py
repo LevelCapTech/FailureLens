@@ -77,11 +77,11 @@ def _diagnose_case(lens: FailureLens, case: dict[str, Any]) -> tuple[RankingCase
     return file_case, function_case
 
 
-def _evaluate_baseline(benchmark_path: Path) -> dict[str, Any]:
+def _evaluate_baseline(benchmark_path: Path, strategy: str | None = None) -> dict[str, Any]:
     """Evaluate the baseline against ``benchmark_path`` and return a report."""
     data = json.loads(benchmark_path.read_text(encoding="utf-8"))
     cases = data.get("cases", [])
-    lens = FailureLens.from_baseline()
+    lens = FailureLens.from_baseline(strategy=strategy)
 
     file_cases: list[RankingCase] = []
     function_cases: list[RankingCase] = []
@@ -114,7 +114,12 @@ def _evaluate_baseline(benchmark_path: Path) -> dict[str, Any]:
     return report
 
 
-def run(benchmark_path: Path, *, tracking: MLflowConfig | None = None) -> dict[str, Any]:
+def run(
+    benchmark_path: Path,
+    *,
+    tracking: MLflowConfig | None = None,
+    strategy: str | None = None,
+) -> dict[str, Any]:
     """Measure the baseline, optionally recording the report in MLflow."""
     benchmark_path = benchmark_path.resolve()
     with track_experiment(tracking, kind="baseline-evaluation", repository=REPO_ROOT) as experiment:
@@ -128,7 +133,7 @@ def run(benchmark_path: Path, *, tracking: MLflowConfig | None = None) -> dict[s
                     "candidate_limit": DiagnoseConfig().top_k,
                 }
             )
-        report = _evaluate_baseline(benchmark_path)
+        report = _evaluate_baseline(benchmark_path, strategy)
         experiment.log_params({"analysis_method": report["analysis_method"]})
         for level in ("file_level", "function_level", "performance"):
             experiment.log_metrics(
@@ -152,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional path to also write the JSON report to.",
     )
+    parser.add_argument(
+        "--strategy",
+        default=None,
+        help="Baseline strategy (stacktrace-lexical or stacktrace-callgraph); default: package default.",
+    )
     add_tracking_arguments(parser)
     args = parser.parse_args(argv)
     tracking = tracking_from_args(parser, args)
@@ -162,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_name = tracking.run_name if tracking is not None else None
     with notify_run("baseline-evaluation", run_name) as notifier:
-        report = run(args.benchmark, tracking=tracking)
+        report = run(args.benchmark, tracking=tracking, strategy=args.strategy)
         notifier.set_metrics(
             {
                 f"{level}.{key}": value
