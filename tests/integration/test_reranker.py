@@ -258,3 +258,38 @@ def test_split_paths_keep_train_and_dev_apart() -> None:
     assert driver.split_paths(root, "train")["trees"] == root / "train-eval" / "tree_manifest.json"
     with pytest.raises(ValueError):
         driver.split_paths(root, "holdout")
+
+
+def test_end_to_end_report_recording_and_artifacts(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("sklearn")
+    pytest.importorskip("mlflow")
+    import dataclasses
+
+    from evaluation import record_reranker
+
+    monkeypatch.setenv("MLFLOW_DISABLE_TELEMETRY", "true")
+    lens = FailureLens.from_baseline()
+    cases, baseline = _load_full(_fixture(tmp_path / "fx"))
+    other = [dataclasses.replace(cases[0], repository_id=f"synthetic/other-{i}") for i in range(2)]
+    train = driver.build_split([cases[0], *other], lens, None)
+    dev = driver.build_split(cases, lens, None)
+    g1_only = tuple(c for c in models.CONFIGS if not c.uses_embedding)
+    report = driver.run_experiment(
+        train, dev, baseline, [0.01], {}, tmp_path / "runs", "synthetic", g1_only
+    )
+    report["train_corpus_records"] = 3
+    report["train_excluded_by_product_limits"] = {}
+    assert report["selected"] in {"A", "B", "C", "D"}
+    assert report["verdict"] in {"pass", "stop"}
+    assert report["dev_cases"] == 1 and len(report["candidates"]) == 4
+    assert set(report["rules"]) >= {"R1_gain_over_v5", "R5_speed_and_memory", "all_pass"}
+    assert (tmp_path / "runs" / "synthetic" / "candidate-a" / "model.pkl").is_file()
+    path = driver.write_report(report, tmp_path / "out", "r.json")
+    uri = f"sqlite:///{tmp_path / 'store.db'}"
+    first = record_reranker.record(path, uri)
+    assert len(first) == 5 and all(line.endswith("recorded") for line in first)
+    second = record_reranker.record(path, uri)
+    assert all("skipped" in line for line in second)
+    metrics = record_reranker.summary_metrics(report)
+    assert metrics["rule.all_pass"] in {0.0, 1.0}
+    assert "dev.V5.function_mrr" in metrics

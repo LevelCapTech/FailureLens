@@ -202,7 +202,7 @@ def split_paths(root: Path, split: str) -> dict[str, Path]:
         }
     if split == "train":
         return {
-            "records": root / "train" / "records.json",
+            "records": root / "train-eval" / "records.json",
             "source": root / "train-eval" / "source_manifest.json",
             "train": root / "train-eval" / "train_manifest.json",
             "trees": root / "train-eval" / "tree_manifest.json",
@@ -238,9 +238,45 @@ def prepare_train_eval(root: Path) -> dict[str, int]:
         ),
         encoding="utf-8",
     )
+    return _keep_product_loadable(out_dir, records)
+
+
+def _keep_product_loadable(out_dir: Path, records: list[dict[str, Any]]) -> dict[str, int]:
+    """Drop TRAIN records whose failing tree the product indexer limits reject (aggregate log)."""
+    from collections import Counter
+
+    from evaluation.product_pool import verify_failing_tree
+
+    trees = json.loads((out_dir / "tree_manifest.json").read_text(encoding="utf-8"))
+    sources = json.loads((out_dir / "source_manifest.json").read_text(encoding="utf-8"))
+    kept: list[dict[str, Any]] = []
+    excluded: Counter[str] = Counter()
+    for record in records:
+        try:
+            verify_failing_tree(trees["cases"][record["record_id"]], record["source_commit"])
+        except PrivateInputError as error:
+            excluded[f"{record['source_repository']}: {str(error).rsplit(': ', 1)[-1]}"] += 1
+            continue
+        kept.append(record)
+    ids = {r["record_id"] for r in kept}
+    repositories = {r["source_repository"] for r in kept}
+    filtered_sources = {
+        "repositories": {k: v for k, v in sources["repositories"].items() if k in repositories},
+        "snapshots": {k: v for k, v in sources["snapshots"].items() if k in ids},
+    }
+    filtered_trees = {"cases": {k: v for k, v in trees["cases"].items() if k in ids}}
+    for name, value in (
+        ("records.json", kept),
+        ("source_manifest.json", filtered_sources),
+        ("tree_manifest.json", filtered_trees),
+        ("exclusions.json", {"excluded_by_reason": dict(excluded)}),
+    ):
+        (out_dir / name).write_text(json.dumps(value), encoding="utf-8")
     return {
-        "train_cases": len(cases),
-        "repositories": len({r["source_repository"] for r in records}),
+        "train_records": len(records),
+        "usable_train_cases": len(kept),
+        "excluded_by_product_limits": len(records) - len(kept),
+        "repositories": len(repositories),
     }
 
 
@@ -575,6 +611,16 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
     report["resources"]["total_seconds"] = round(time.perf_counter() - started, 1)
     report["embedding_group_run"] = spec is not None
+    corpus_records = json.loads(
+        (args.corpus_root / "train" / "records.json").read_text(encoding="utf-8")
+    )
+    exclusions = args.corpus_root / "train-eval" / "exclusions.json"
+    report["train_corpus_records"] = len(corpus_records)
+    report["train_excluded_by_product_limits"] = (
+        json.loads(exclusions.read_text(encoding="utf-8"))["excluded_by_reason"]
+        if exclusions.is_file()
+        else {}
+    )
     path = write_report(report, args.out_dir, f"{args.label}.json")
     print(
         json.dumps(
