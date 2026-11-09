@@ -27,6 +27,12 @@ frozen only after pilot and baseline measurement, with human approval.
 - Baseline retrieval + ranking (stack-trace + lexical), deterministic.
 - Public API (`from_baseline`, `diagnose`, `index`) and `failurelens` CLI with
   stable exit codes and versioned JSON output shared by both.
+- Stack-trace + static call-graph baseline strategy (`baseline-stacktrace-callgraph`,
+  the default; the original lexical strategy stays selectable). Measured only on a
+  development set that also picked its weights; see `docs/releases/v0.5/REPORT.md`.
+- An experimental fine-tuned encoder is published on Hugging Face
+  (`docs/model-card.md`). It is not part of the default path, and independent
+  evaluation has not shown that it beats the baseline.
 - Optional embedding reranker backend (uses an external base model; opt-in).
 - Reusable, tested evaluation metrics + a runnable baseline harness with honest,
   measured results; dataset record schema + conforming fixture.
@@ -46,7 +52,8 @@ frozen only after pilot and baseline measurement, with human approval.
   pass-before/fail-after validity rule and data-leak splits (`docs/datasets.md`).
 - Training pipeline with a CPU-only smoke test and one ranking objective
   (`docs/training.md`); reproducible experiment records.
-- First small fine-tuned bi-encoder model, evaluated against the baselines.
+- A fine-tuned model that beats the baselines in an independent, same-condition
+  evaluation (the first experimental encoder has not shown this).
 
 ## Longer term / research
 

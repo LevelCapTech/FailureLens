@@ -14,8 +14,11 @@ FailureLens analyzes **failure evidence** (error logs / stack traces) against a
 **source repository** and returns **ranked candidate fault locations** with
 structured, auditable **evidence**. It distinguishes *where an error surfaced*
 from *the code likely responsible*. Today it ships a **working, dependency-light
-baseline** (stack-trace + lexical). Model-based backends are **optional** and a
-FailureLens-trained model **does not exist yet**.
+baseline** (stack trace + static call relations by default; the original
+stack-trace + lexical strategy is selectable). Model-based backends are
+**optional**. An **experimental** FailureLens-trained encoder is published
+separately, but it is not part of the default path and its superiority has not
+been established.
 
 ## 2. Non-negotiable honesty rules (read twice)
 
@@ -23,7 +26,8 @@ These come directly from the project charter. Violating them is worse than
 writing no code:
 
 1. **Never fabricate** trained models, weights, benchmark numbers, or accuracy
-   claims. No trained FailureLens model exists; do not imply one does.
+   claims. Only an experimental trained encoder exists (see `docs/model-card.md`);
+   do not imply it is better than the baseline or part of the default path.
 2. **Measure, don't assert.** Any accuracy/benchmark figure must be produced by
    `evaluation/run_baseline_eval.py` (or a successor harness) on committed data.
 3. **Separate working from planned.** Code that runs today vs. future design must

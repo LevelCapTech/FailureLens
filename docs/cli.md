@@ -37,6 +37,7 @@ Diagnoses a failure and prints ranked candidate fault locations.
 | `--format` | `-f` | `text` | `text` (human) or `json` (machine). |
 | `--model` | `-m` | `baseline` | Analysis backend id. |
 | `--revision` | | — | Pinned model revision (model backends only). |
+| `--baseline` | | package default (`stacktrace-callgraph`) | Baseline strategy: `stacktrace-callgraph` or `stacktrace-lexical` (baseline backend only). An unknown value exits with `4`. |
 | `--quiet` | `-q` | off | Suppress progress messages (keeps stdout clean for JSON). |
 
 ### `models`
@@ -46,7 +47,8 @@ failurelens models info [--model <backend>] [--format text|json]   # details
 ```
 `models list` honestly distinguishes what is **available** now (the baseline)
 from external/optional entries that require the `ml` extra. No FailureLens-trained
-model is listed as released, because none exists.
+model is listed as released here; the experimental encoder is published separately
+on Hugging Face (see `docs/model-card.md`) and is not used by the CLI.
 
 ## Output streams
 
@@ -81,7 +83,7 @@ know exactly which backend produced the result and can manage compatibility.
 
 ```jsonc
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "status": "ok",
   "repository": "examples/fixtures/sample_project",
   "error_type": "ZeroDivisionError",
@@ -93,7 +95,7 @@ know exactly which backend produced the result and can manage compatibility.
       "function": "divide",
       "start_line": 6,
       "end_line": 12,
-      "score": 0.8,
+      "score": 0.25,
       "score_type": "heuristic",
       "evidence": [
         {"kind": "stack_frame", "description": "Appears in stack frame 4 ...", "frame_order": 4},
@@ -101,7 +103,7 @@ know exactly which backend produced the result and can manage compatibility.
       ]
     }
   ],
-  "analysis_method": "baseline-stacktrace-lexical",
+  "analysis_method": "baseline-stacktrace-callgraph",
   "model_id": null,
   "model_revision": null,
   "execution_time_ms": 1.4,

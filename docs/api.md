@@ -30,9 +30,13 @@ from failurelens import (
 ### Constructors
 
 ```python
-FailureLens.from_baseline(*, parser_registry=None) -> FailureLens
+FailureLens.from_baseline(*, strategy=None, parser_registry=None) -> FailureLens
 ```
 Dependency-free baseline backend. Runs on CPU, offline. **This is the default.**
+`strategy` is `"stacktrace-callgraph"` (default; `analysis_method =
+baseline-stacktrace-callgraph`) or `"stacktrace-lexical"` (the original strategy;
+`analysis_method = baseline-stacktrace-lexical`). An unknown value raises
+`InputError`.
 
 ```python
 FailureLens.from_pretrained(model_id, *, revision=None, device=None, parser_registry=None) -> FailureLens
@@ -92,7 +96,7 @@ Both models set `extra="forbid"`, so unknown keys raise.
 ## Output schema
 
 `DiagnosisResult` is the contract shared by the API and the CLI's JSON output. It
-is versioned by `SCHEMA_VERSION` (currently `0.1.0`); JSON output includes
+is versioned by `SCHEMA_VERSION` (currently `0.2.0`); JSON output includes
 `schema_version` so consumers can manage compatibility.
 
 ### `DiagnosisResult`
@@ -104,7 +108,7 @@ is versioned by `SCHEMA_VERSION` (currently `0.1.0`); JSON output includes
 | `error_type` | `str \| None` | Exception/error class. |
 | `error_message` | `str \| None` | Error message. |
 | `candidates` | `list[Candidate]` | Ranked, best first. |
-| `analysis_method` | `str` | e.g. `baseline-stacktrace-lexical`. |
+| `analysis_method` | `str` | `baseline-stacktrace-callgraph` (default) or `baseline-stacktrace-lexical`. |
 | `model_id` | `str \| None` | Set only for model backends. |
 | `model_revision` | `str \| None` | Pinned revision, if any. |
 | `execution_time_ms` | `float` | Wall-clock analysis time. |
@@ -129,7 +133,7 @@ Helper: `result.to_json(indent=2) -> str`.
 ### `Evidence`
 | Field | Type | Notes |
 |-------|------|-------|
-| `kind` | `EvidenceKind` | e.g. `stack_frame`, `exception_site`, `lexical_match`. |
+| `kind` | `EvidenceKind` | e.g. `stack_frame`, `exception_site`, `lexical_match`, `call_relation` (schema 0.2.0; name-based call relation to a function in the stack). |
 | `description` | `str` | Short, factual description. |
 | `frame_order` | `int \| None` | Related stack-frame index, if any. |
 

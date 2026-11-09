@@ -12,12 +12,18 @@ CI systems, and AI coding agents can go straight to the root cause.
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](docs/installation.md)
 
 > **Honest status.** FailureLens ships a **working, dependency-light baseline**
-> (stack-trace + lexical, CPU-only, no network). An **experimental trained
-> encoder** is published at [LevelCapTech/failurelens](https://huggingface.co/LevelCapTech/failurelens).
-> Independent held-out evaluation is pending; superiority over the baseline or
-> base encoder is not established. Use the standalone SentenceTransformers
-> example on the model card: the library's generic `from_pretrained` path does
-> not yet support this trained repository's custom code and query transform.
+> (stack trace + static call relations, CPU-only, no network, no model; the
+> original stack-trace + lexical strategy stays selectable). On a development
+> set the call-relation baseline ranked the cause higher than the original
+> strategy (measured by [`evaluation/run_callgraph_eval.py`](evaluation/run_callgraph_eval.py)),
+> but that set also picked its weights, so this is **not independent
+> evidence**; see the [v0.5 report](docs/releases/v0.5/REPORT.md). An
+> **experimental trained encoder** is published at
+> [LevelCapTech/failurelens](https://huggingface.co/LevelCapTech/failurelens); it
+> is **not** part of the default path, and its superiority is not established.
+> Use the standalone SentenceTransformers example on the model card: the
+> library's generic `from_pretrained` path does not yet support this trained
+> repository's custom code and query transform.
 
 ## Why FailureLens?
 
@@ -30,7 +36,9 @@ wrapper, generic code search, or an error-message summariser.
 ## Features
 
 - 🔦 **Fault localization baseline** — ranks files/functions/line-spans with
-  transparent, deterministic heuristics. No GPU, no network, no model download.
+  transparent, deterministic heuristics (stack depth and static call relations;
+  `--baseline stacktrace-lexical` selects the original strategy). No GPU, no
+  network, no model download.
 - 🧩 **Same result everywhere** — a single versioned schema shared by the Python
   API and the CLI's JSON output.
 - 🧪 **Honest by design** — `score_type` says scores are heuristic (not

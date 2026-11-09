@@ -9,12 +9,14 @@ and this project aims to adhere to [Semantic Versioning](https://semver.org/spec
 
 ### Added
 
-#### Call-graph baseline (opt-in strategy)
+#### Call-graph baseline (new default strategy)
 - `baseline-stacktrace-callgraph` analyzer: ranks every function and method from
   the stack-trace depth plus static, name-based call relations (up to two hops)
   to functions in the stack. No model, offline, no new dependencies.
-  Select it with `FailureLens.from_baseline(strategy="stacktrace-callgraph")` or
-  `failurelens diagnose --baseline stacktrace-callgraph`.
+  It is the default; `from_baseline(strategy="stacktrace-lexical")` or
+  `failurelens diagnose --baseline stacktrace-lexical` selects the original
+  strategy. Measured on a development set that also selected its weights, so not
+  independent evidence (`docs/releases/v0.5/REPORT.md`).
 - Output schema `0.2.0`: new evidence kind `call_relation` (additive).
 
 #### Monorepo bootstrap and core library

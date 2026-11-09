@@ -35,8 +35,11 @@ exposed through the **facade** (`failurelens.api.FailureLens`) and the **CLI**
 
 ## The baseline algorithm (what runs today)
 
-The `baseline` backend (`analysis_method = "baseline-stacktrace-lexical"`) is
-deterministic and dependency-free:
+The `baseline` backend is deterministic and dependency-free and has two
+strategies: `stacktrace-callgraph` (`analysis_method =
+"baseline-stacktrace-callgraph"`, the default, described after this list) and the
+original `stacktrace-lexical` (`analysis_method = "baseline-stacktrace-lexical"`),
+described here:
 
 1. **Parse** the Python traceback into ordered `StackFrame`s (exception type,
    message, file, line, function). Frame `order` increases with depth; the
@@ -57,6 +60,28 @@ deterministic and dependency-free:
    it came from, whether it is the exception site, and which error tokens
    matched. No LLM-generated narrative.
 6. **Structure**: return a `DiagnosisResult`.
+
+### Call-graph strategy (default)
+
+`stacktrace-callgraph` ranks **every function and method** of the repository
+(not only those in the trace):
+
+1. The same log parsing, indexing and frame-to-unit resolution as above.
+2. A static, **name-based** call graph links each function to the functions and
+   methods named in its calls (`f()`, `obj.f()`), in both directions. Names shared
+   by more than 8 units are ignored; dynamic dispatch and imports are not
+   resolved, so unrelated functions with the same name may be linked.
+3. `score = 0.25·stack + 0.25·call_relation`. `stack` uses the baseline's depth
+   and exception-site formula; `call_relation` is 0.5 for one call-relation hop
+   from a function in the stack and 0.25 for two. Ties break by candidate ID.
+   Lexical overlap with the error message is shown as evidence only.
+4. Evidence is observed and plain: the stack frames, or a `call_relation` entry such
+   as "One call-relation hop (matched by name): is called by 'handle', which
+   appears in stack frame 1."
+
+The weights come from the v0.4 development experiment and were not re-tuned
+(see `docs/releases/v0.5/REPORT.md` for the measurement and its limits). Very
+large repositories (more than 50,000 units) skip the graph with a warning.
 
 > `score` is a **relative heuristic**, not a probability (`score_type =
 > heuristic`). The baseline intentionally over-weights the exception site, so the
