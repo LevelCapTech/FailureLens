@@ -61,3 +61,19 @@ Four more permissively licensed, pure-Python sources for the v0.3 private synthe
 | `lepture/mistune` | `f7ec702edfc1ad5579a76f881238841af266d93c` | [`LICENSE`](https://github.com/lepture/mistune/blob/f7ec702edfc1ad5579a76f881238841af266d93c/LICENSE), BSD-3-Clause text (blob SHA-256 `539013fd8e19f744...`) | train | Rights-cleared source |
 
 These are source candidates, not accepted cases. Records exist only after the target project's own tests pass on the clean tree and fail after one exact mutation, and pass the schema and semantic gates.
+
+## Gate C v3 evaluation sources (final-evaluation set; added 2026-11-09)
+
+Sources for a second fresh, private final-evaluation set (`docs/gate-c-v3.md`), built because Gate C v2 is consumed. Each license file was read at the pinned commit and its text classified by `training/corpus/build.py prepare`. The same conditions as above apply: local synthetic mutation and own-generated logs only, no authorization to redistribute derived records, retain notices on any redistribution, no endorsement.
+
+**These repositories are disjoint from every repository in the first hold-out (`psf/requests`, `pallets/werkzeug`, `pypa/pip`), from the Gate C v2 sources (`tkem/cachetools`, `PyCQA/pycodestyle`, `python-validators/validators`, `bottlepy/bottle`), from all v0.2 and v0.3 train and dev repositories above, from the legacy training repositories (`pallets/click`, `python-attrs/attrs`), and from any repository added to a training manifest.** `training/corpus/gatec_v3.py` fails closed on any overlap and rewrites only the training manifest when the training list changes.
+
+| Source | Pin | License evidence | Split | Status |
+|---|---|---|---|---|
+| `PyCQA/pyflakes` | `5324946c5d8602697f5df6d98ad162920b3e5d61` | [`LICENSE`](https://github.com/PyCQA/pyflakes/blob/5324946c5d8602697f5df6d98ad162920b3e5d61/LICENSE), MIT text (blob SHA-256 `22c47569cc0aae531b372361366818af01c6fc2e314770584a7866c92b3a0463`) | evaluation | Rights-cleared source |
+| `pallets/markupsafe` | `4e111271b1494995708a9e878a10829b5e10c7ba` | [`LICENSE.txt`](https://github.com/pallets/markupsafe/blob/4e111271b1494995708a9e878a10829b5e10c7ba/LICENSE.txt), BSD-3-Clause text (blob SHA-256 `489a8e1108509ed98a37bb983e11e0f7e1d31f0bd8f99a79c8448e7ff37d07ea`) | evaluation | Rights-cleared source |
+| `python-hyper/h11` | `62c5068c971579d61fa1b55373390e12f25fd856` | [`LICENSE.txt`](https://github.com/python-hyper/h11/blob/62c5068c971579d61fa1b55373390e12f25fd856/LICENSE.txt), MIT text (blob SHA-256 `37db5bb85926db28a427a25867f10b1232003aea1be69ccb851138adb8e6f361`) | evaluation | Rights-cleared source |
+| `python-hyper/hpack` | `6aa8c0b2265f558f7184047aa09dcc573e625f82` | [`LICENSE`](https://github.com/python-hyper/hpack/blob/6aa8c0b2265f558f7184047aa09dcc573e625f82/LICENSE), MIT text (blob SHA-256 `763a9342a04df62046c9dc748a5287934eb0a5331c6863b3ca0aee20e18cb4ed`) | evaluation | Rights-cleared source |
+| `Python-Markdown/markdown` | `40eca048f57456d855a491e7f94ba215594f3f57` | [`LICENSE.md`](https://github.com/Python-Markdown/markdown/blob/40eca048f57456d855a491e7f94ba215594f3f57/LICENSE.md), BSD-3-Clause text (blob SHA-256 `7ba4eb6d10b32b2d11dce13821340351cdbbb30ba8ccc67841db2ffd86e79aca`) | evaluation | Rights-cleared source |
+
+These are source candidates, not accepted cases. Each record needs the project's own tests to pass on the clean tree and fail after one exact edit, plus the schema and semantic gates.
