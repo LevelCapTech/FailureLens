@@ -77,3 +77,19 @@ Sources for a second fresh, private final-evaluation set (`docs/gate-c-v3.md`), 
 | `Python-Markdown/markdown` | `40eca048f57456d855a491e7f94ba215594f3f57` | [`LICENSE.md`](https://github.com/Python-Markdown/markdown/blob/40eca048f57456d855a491e7f94ba215594f3f57/LICENSE.md), BSD-3-Clause text (blob SHA-256 `7ba4eb6d10b32b2d11dce13821340351cdbbb30ba8ccc67841db2ffd86e79aca`) | evaluation | Rights-cleared source |
 
 These are source candidates, not accepted cases. Each record needs the project's own tests to pass on the clean tree and fail after one exact edit, plus the schema and semantic gates.
+
+## Gate C v4 evaluation sources (final-evaluation set; added 2026-11-10)
+
+Sources for a third fresh, private final-evaluation set (`docs/gate-c-v4.md`), built because Gate C v3 is consumed. Each license file was read at the pinned commit and its text classified by `training/corpus/build.py prepare`. The same conditions as above apply: local synthetic mutation and own-generated logs only, no authorization to redistribute derived records, retain notices on any redistribution, no endorsement.
+
+**These repositories are disjoint from every earlier source: the first hold-out, the Gate C v2 and v3 sources, all v0.2 and v0.3 train and dev repositories, the legacy training repositories, the repositories dropped while building v3, and any repository added to a training manifest.** `training/corpus/gatec_v4.py` fails closed on any overlap.
+
+| Source | Pin | License evidence | Split | Status |
+|---|---|---|---|---|
+| `pyparsing/pyparsing` | `810199f89bf916590426e1c5cb3d612584f11a2f` | [`LICENSE`](https://github.com/pyparsing/pyparsing/blob/810199f89bf916590426e1c5cb3d612584f11a2f/LICENSE), MIT text (blob SHA-256 `a5425f9dc14ac74d4c5f0b679e941f2442e32cca7452a4418d5b1a49893ebe4e`) | evaluation | Rights-cleared source |
+| `hukkin/tomli` | `43a86ade8b795c6ef9b4ec53372a607cd1ed426f` | [`LICENSE`](https://github.com/hukkin/tomli/blob/43a86ade8b795c6ef9b4ec53372a607cd1ed426f/LICENSE), MIT text (blob SHA-256 `b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe`) | evaluation | Rights-cleared source |
+| `r1chardj0n3s/parse` | `616ac26ca4077266dee2479dc51a8d19feab0ada` | [`LICENSE`](https://github.com/r1chardj0n3s/parse/blob/616ac26ca4077266dee2479dc51a8d19feab0ada/LICENSE), MIT text (blob SHA-256 `2cc9942fe3f52a669c1fbb4e0bae9a27300d56564a382e954845c3256c4cabe2`) | evaluation | Rights-cleared source |
+| `keleshev/schema` | `310a1239b62f500284ce3bd91b7dabf70467f23e` | [`LICENSE-MIT`](https://github.com/keleshev/schema/blob/310a1239b62f500284ce3bd91b7dabf70467f23e/LICENSE-MIT), MIT text (blob SHA-256 `f4360ca8f779e6a673cd2882f73419bc2c5f74184fd9db91d2e86a368cc04e0b`) | evaluation | Rights-cleared source |
+| `martinblech/xmltodict` | `6e29fba282e68631034dd2722a413b4e35276584` | [`LICENSE`](https://github.com/martinblech/xmltodict/blob/6e29fba282e68631034dd2722a413b4e35276584/LICENSE), MIT text (blob SHA-256 `d66d5eb8f83a0ba21d3dd04318b8817588e8764daabea852d1035e3f07ffda55`) | evaluation | Rights-cleared source |
+
+These are source candidates, not accepted cases. Each record needs the project's own tests to pass on the clean tree and fail after one exact edit, plus the schema and semantic gates.

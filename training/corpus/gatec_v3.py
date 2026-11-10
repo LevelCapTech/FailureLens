@@ -306,11 +306,11 @@ def select_v3(
 # --------------------------------------------------------------------------- finalize
 
 
-def _renumber(cases: list[EvalCase]) -> None:
+def _renumber(cases: list[EvalCase], prefix: str = "gcv3") -> None:
     counters: Counter[str] = Counter()
     for case in cases:
         key = case.repo.split("/", 1)[1].lower().replace(".", "-")
-        case.record["record_id"] = f"gcv3-{key}-{counters[key]:04d}"
+        case.record["record_id"] = f"{prefix}-{key}-{counters[key]:04d}"
         counters[key] += 1
 
 
@@ -321,11 +321,17 @@ def finalize(
     seed: int,
     train_repos: list[str],
     log: Log = build._log,
+    repos: tuple[SourceRepo, ...] = V3_REPOSITORIES,
+    eval_id: str = V3_ID,
+    generator_version: str = V3_GENERATOR_VERSION,
+    id_prefix: str = "gcv3",
+    validate: Callable[..., None] | None = None,
+    extra_excluded: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    validate_v3_table(extra_train=tuple(train_repos))
+    (validate or validate_v3_table)(repos, tuple(train_repos))
     pool: list[EvalCase] = []
     repo_reports: list[dict[str, Any]] = []
-    for repo in V3_REPOSITORIES:
+    for repo in repos:
         raw_path = ws.raw(repo)
         if not raw_path.exists():
             log(f"skip {repo.key}: no raw output")
@@ -341,7 +347,7 @@ def finalize(
     kept_ids = {id(g) for g in kept_generated}
     survivors = [c for c, g in zip(pool, wrapped, strict=True) if id(g) in kept_ids]
     selected = select_v3(survivors, total, seed=seed)
-    _renumber(selected)
+    _renumber(selected, id_prefix)
     out_dir = ws.root
     records = [c.record for c in selected]
     write_private_json(out_dir / "records.json", records)
@@ -357,14 +363,14 @@ def finalize(
             for c in selected
         },
     )
-    by_slug = {r.slug: r for r in V3_REPOSITORIES}
+    by_slug = {r.slug: r for r in repos}
     write_eval_trees(ws, selected, out_dir, lambda slug: by_slug[slug])
     eval_repos = sorted({c.repo for c in selected})
     write_train_manifest(out_dir, train_repos, eval_repos)
     digest = sha256_file(out_dir / "records.json")
     summary: dict[str, Any] = {
-        "eval_id": V3_ID,
-        "generator_version": V3_GENERATOR_VERSION,
+        "eval_id": eval_id,
+        "generator_version": generator_version,
         "records": len(records),
         "repositories": eval_repos,
         "records_by_repository": dict(Counter(c.repo for c in selected)),
@@ -382,17 +388,18 @@ def finalize(
     write_private_json(
         out_dir / "manifest.json",
         {
-            "eval_id": V3_ID,
-            "generator_version": V3_GENERATOR_VERSION,
+            "eval_id": eval_id,
+            "generator_version": generator_version,
             "purpose": "private final independent evaluation; one use per selected configuration",
             "records_sha256": digest,
-            "pins": {r.slug: r.commit for r in V3_REPOSITORIES if r.slug in set(eval_repos)},
+            "pins": {r.slug: r.commit for r in repos if r.slug in set(eval_repos)},
             "excluded_repositories": sorted(
                 {
                     *HOLDOUT_REPOSITORIES,
                     *(r.slug for r in REPOSITORIES),
                     *gatec_v2.LEGACY_TRAIN_REPOSITORIES,
                     *GATEC_V2_REPOSITORIES,
+                    *extra_excluded,
                 }
             ),
         },
@@ -414,7 +421,13 @@ def _read_train_repos(path: Path | None) -> list[str]:
     return sorted({*default_train_repositories(), *repos})
 
 
-def _generate_one(args: argparse.Namespace, ws: Workspace, repo: SourceRepo) -> None:
+def _generate_one(
+    args: argparse.Namespace,
+    ws: Workspace,
+    repo: SourceRepo,
+    dataset_id: str = V3_DATASET_ID,
+    generator_version: str = V3_GENERATOR_VERSION,
+) -> None:
     raw_path = ws.raw(repo)
     if raw_path.exists() and not args.force:
         build._log(f"skip {repo.key}: raw output exists")
@@ -426,8 +439,8 @@ def _generate_one(args: argparse.Namespace, ws: Workspace, repo: SourceRepo) -> 
         target=args.repo_target,
         per_function=3,
         hard=True,
-        dataset_id=V3_DATASET_ID,
-        generator_version=V3_GENERATOR_VERSION,
+        dataset_id=dataset_id,
+        generator_version=generator_version,
         categorize=_make_categorizer(repo),
     )
     write_private_json(
