@@ -105,6 +105,12 @@ class ParsedLog(BaseModel):
     frames: list[StackFrame] = Field(
         default_factory=list, description="Stack frames ordered outermost (0) to innermost."
     )
+    raw_text: str | None = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description="Original log text, set by the API for analyzers that read identifiers in it.",
+    )
 
 
 class Evidence(BaseModel):

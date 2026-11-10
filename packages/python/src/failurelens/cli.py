@@ -157,7 +157,8 @@ def diagnose(
         typer.Option(
             "--baseline",
             help=(
-                "Baseline strategy: stacktrace-lexical or stacktrace-callgraph "
+                "Baseline strategy: stacktrace-lexical, stacktrace-callgraph or "
+                "stacktrace-callgraph-weighted (opt-in) "
                 "(baseline backend only; default: the package default)."
             ),
         ),

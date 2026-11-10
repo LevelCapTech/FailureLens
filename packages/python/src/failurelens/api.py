@@ -51,7 +51,8 @@ class FailureLens:
     ) -> FailureLens:
         """Create an engine using a dependency-free baseline analyzer.
 
-        ``strategy`` selects ``"stacktrace-lexical"`` or ``"stacktrace-callgraph"``;
+        ``strategy`` selects ``"stacktrace-lexical"``, ``"stacktrace-callgraph"`` or the
+        opt-in ``"stacktrace-callgraph-weighted"``;
         ``None`` uses the package default (``failurelens.inference.DEFAULT_BASELINE_STRATEGY``).
         Both run offline on CPU with no model.
         """
@@ -138,6 +139,7 @@ class FailureLens:
                 warnings=["Could not parse the provided log with any registered parser."],
             )
 
+        parsed_log = parsed_log.model_copy(update={"raw_text": text})
         repo_index = index if index is not None else build_index(repository, config.index)
         result = self._analyzer.analyze(
             repository=repository_str,

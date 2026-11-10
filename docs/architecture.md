@@ -83,6 +83,20 @@ The weights come from the v0.4 development experiment and were not re-tuned
 (see `docs/releases/v0.5/REPORT.md` for the measurement and its limits). Very
 large repositories (more than 50,000 units) skip the graph with a warning.
 
+### Weighted call-graph strategy (opt-in, experimental)
+
+`stacktrace-callgraph-weighted` (`analysis_method =
+"baseline-stacktrace-callgraph-weighted"`) scores every function and method with a
+logistic-regression decision value over 15 deterministic features: stack position,
+call relations (direction and distance), same file as a stack function, the
+function name appearing in the log or in the error message, and whether the
+function lives in a **test file** (decided from the path only; such functions are
+ranked lower). The 15 coefficients are frozen constants fitted offline on
+development data (`inference/weighted_constants.py`); nothing is learned or
+downloaded at run time and no model is used. It is **not** the default, and its
+only measurement so far is on development data that also selected it. See
+`docs/releases/v0.7/REPORT.md`.
+
 > `score` is a **relative heuristic**, not a probability (`score_type =
 > heuristic`). The baseline intentionally over-weights the exception site, so the
 > *surfacing* function can outrank the *root cause*; the evidence makes this

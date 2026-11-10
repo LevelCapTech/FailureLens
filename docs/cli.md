@@ -37,7 +37,7 @@ Diagnoses a failure and prints ranked candidate fault locations.
 | `--format` | `-f` | `text` | `text` (human) or `json` (machine). |
 | `--model` | `-m` | `baseline` | Analysis backend id. |
 | `--revision` | | — | Pinned model revision (model backends only). |
-| `--baseline` | | package default (`stacktrace-callgraph`) | Baseline strategy: `stacktrace-callgraph` or `stacktrace-lexical` (baseline backend only). An unknown value exits with `4`. |
+| `--baseline` | | package default (`stacktrace-callgraph`) | Baseline strategy: `stacktrace-callgraph`, `stacktrace-lexical` or the opt-in experimental `stacktrace-callgraph-weighted` (baseline backend only). An unknown value exits with `4`. |
 | `--quiet` | `-q` | off | Suppress progress messages (keeps stdout clean for JSON). |
 
 ### `models`

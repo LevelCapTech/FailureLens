@@ -30,6 +30,9 @@ frozen only after pilot and baseline measurement, with human approval.
 - Stack-trace + static call-graph baseline strategy (`baseline-stacktrace-callgraph`,
   the default; the original lexical strategy stays selectable). Measured only on a
   development set that also picked its weights; see `docs/releases/v0.5/REPORT.md`.
+- Opt-in `stacktrace-callgraph-weighted` strategy (fixed weights, test files ranked
+  lower). Development-set result only; awaiting one independent measurement
+  (`docs/releases/v0.7/REPORT.md`).
 - An experimental fine-tuned encoder is published on Hugging Face
   (`docs/model-card.md`). It is not part of the default path, and independent
   evaluation has not shown that it beats the baseline.

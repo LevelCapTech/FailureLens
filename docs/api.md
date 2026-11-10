@@ -34,8 +34,10 @@ FailureLens.from_baseline(*, strategy=None, parser_registry=None) -> FailureLens
 ```
 Dependency-free baseline backend. Runs on CPU, offline. **This is the default.**
 `strategy` is `"stacktrace-callgraph"` (default; `analysis_method =
-baseline-stacktrace-callgraph`) or `"stacktrace-lexical"` (the original strategy;
-`analysis_method = baseline-stacktrace-lexical`). An unknown value raises
+baseline-stacktrace-callgraph`), `"stacktrace-lexical"` (the original strategy;
+`analysis_method = baseline-stacktrace-lexical`) or the opt-in experimental
+`"stacktrace-callgraph-weighted"` (`analysis_method =
+baseline-stacktrace-callgraph-weighted`; fixed weights, test files ranked lower). An unknown value raises
 `InputError`.
 
 ```python
@@ -108,7 +110,7 @@ is versioned by `SCHEMA_VERSION` (currently `0.2.0`); JSON output includes
 | `error_type` | `str \| None` | Exception/error class. |
 | `error_message` | `str \| None` | Error message. |
 | `candidates` | `list[Candidate]` | Ranked, best first. |
-| `analysis_method` | `str` | `baseline-stacktrace-callgraph` (default) or `baseline-stacktrace-lexical`. |
+| `analysis_method` | `str` | `baseline-stacktrace-callgraph` (default), `baseline-stacktrace-lexical` or `baseline-stacktrace-callgraph-weighted` (opt-in). |
 | `model_id` | `str \| None` | Set only for model backends. |
 | `model_revision` | `str \| None` | Pinned revision, if any. |
 | `execution_time_ms` | `float` | Wall-clock analysis time. |
